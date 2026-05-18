@@ -1,0 +1,96 @@
+# electron-builder configuration for Claude Code Agent Monitor (macOS).
+#
+# Defaults to ad-hoc signing so the project can build distributable DMGs
+# without a paid Apple Developer account. When the following environment
+# variables are set in CI (typically as repository secrets), the same
+# config produces a Developer ID–signed and Apple-notarized DMG:
+#
+#   APPLE_ID                       Apple ID email
+#   APPLE_TEAM_ID                  Developer team identifier
+#   APPLE_APP_SPECIFIC_PASSWORD    App-specific password for notarytool
+#   CSC_LINK                       Base64-encoded .p12 cert (optional)
+#   CSC_KEY_PASSWORD               Password for the .p12 (optional)
+#
+# No code changes are required to enable notarization later.
+
+appId: com.hoangsonww.ccam.desktop
+productName: Claude Code Monitor
+copyright: Copyright (c) 2026 Son Nguyen. MIT License.
+
+directories:
+  output: release
+  buildResources: assets
+
+# We pre-build with tsc into out/, and we ship the existing server/ and
+# client/dist/ from the parent repo as extraResources. Keeping the bundle
+# small: no source maps, no parent node_modules tree.
+files:
+  - "out/**/*"
+  - "package.json"
+
+extraResources:
+  - from: "../server"
+    to: "app/server"
+    filter:
+      - "**/*"
+      - "!__tests__/**"
+      - "!**/*.test.js"
+  - from: "../client/dist"
+    to: "app/client/dist"
+    filter: ["**/*"]
+  - from: "../scripts"
+    to: "app/scripts"
+    filter:
+      - "**/*"
+      - "!**/*.test.js"
+  - from: "../package.json"
+    to: "app/package.json"
+  - from: "../node_modules"
+    to: "app/node_modules"
+    filter:
+      - "**/*"
+      - "!**/*.md"
+      - "!**/test/**"
+      - "!**/tests/**"
+      - "!**/*.d.ts"
+
+asar: true
+asarUnpack:
+  # better-sqlite3 native bindings cannot live inside asar.
+  - "**/node_modules/better-sqlite3/**"
+
+mac:
+  category: public.app-category.developer-tools
+  icon: assets/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # identity: null → ad-hoc by default. electron-builder will switch to
+  # Developer ID automatically if CSC_LINK / a keychain identity is present.
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  extendInfo:
+    LSUIElement: false
+    NSHighResolutionCapable: true
+    NSRequiresAquaSystemAppearance: false
+
+dmg:
+  artifactName: "ClaudeCodeMonitor-${version}-${arch}.dmg"
+  title: "Claude Code Monitor ${version}"
+  icon: assets/icon.icns
+  contents:
+    - x: 130
+      y: 220
+      type: file
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+  window:
+    width: 540
+    height: 380
+
+# Notarization runs only when the Apple credentials are present.
+afterSign: scripts/notarize.js
