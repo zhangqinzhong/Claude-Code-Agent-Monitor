@@ -53,8 +53,10 @@ export function installApplicationMenu(actions: MenuActions): Menu {
           click: () => actions.showDashboard(),
         },
         {
+          // No accelerator here: the View menu's `reload` role already owns
+          // CmdOrCtrl+R. Two menu items sharing one accelerator triggers an
+          // Electron duplicate-accelerator warning at startup.
           label: "Reload Dashboard",
-          accelerator: "CmdOrCtrl+R",
           click: () => actions.reloadDashboard(),
         },
         { type: "separator" },

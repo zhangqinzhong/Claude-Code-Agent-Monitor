@@ -80,7 +80,7 @@ desktop/
     └── smoke.test.mjs          # spawn-and-probe /api/health
 ```
 
-**The diff in every other directory is zero.** `server/`, `client/`, `scripts/`, `mcp/`, and `vscode-extension/` are untouched by this feature. The Electron main process is just a host for the same code.
+**The only change outside `desktop/` is a behavior-preserving refactor of `server/index.js`:** the post-listen bootstrap (update scheduler, Claude Code config watcher, orphaned-run reconciliation) was extracted into an exported `startBackgroundServices()` so the embedded server runs exactly what `node server/index.js` runs. The standalone server path is functionally unchanged. `client/`, `scripts/`, `mcp/`, and `vscode-extension/` are untouched. The Electron main process is otherwise just a host for the same code.
 
 ## Gatekeeper (first launch)
 

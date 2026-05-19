@@ -30,4 +30,4 @@ npm run desktop:dmg      # produces release/ClaudeCodeMonitor-*.dmg
 
 ## What this code does *not* touch
 
-By design, the desktop workspace makes zero changes to `server/`, `client/`, `scripts/`, `mcp/`, or `vscode-extension/`. If you find yourself wanting to edit those, that's a separate PR.
+By design, the desktop workspace keeps changes outside `desktop/` to a minimum. The one exception is `server/index.js`: its post-listen bootstrap was extracted into an exported `startBackgroundServices()` so the embedded server boots the same scheduler, config watcher, and run-reconciliation that `node server/index.js` does — a behavior-preserving refactor, not a behavior change. `client/`, `scripts/`, `mcp/`, and `vscode-extension/` are untouched. If you find yourself wanting to edit those, that's a separate PR.
