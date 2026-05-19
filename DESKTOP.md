@@ -23,7 +23,10 @@ The two coexist — install whichever fits your workflow.
 
 **Option A — download a pre-built DMG** (from the latest CI run or release):
 
-1. Download `ClaudeCodeMonitor-<version>-universal.dmg` from the GitHub release page (or from the `ClaudeCodeMonitor-dmg` artifact on the latest passing CI run).
+1. Download `ClaudeCodeMonitor-<version>-universal.dmg` from the GitHub release page, or from the `ClaudeCodeMonitor-dmg` artifact on the latest passing CI run:
+   ```bash
+   gh run download <run-id> -R hoangsonww/Claude-Code-Agent-Monitor -n ClaudeCodeMonitor-dmg
+   ```
 2. Double-click → drag `Claude Code Monitor.app` into your `Applications` folder.
 3. Open it. macOS may show a Gatekeeper warning the first time — see [Gatekeeper](#gatekeeper-first-launch) below.
 
@@ -34,9 +37,23 @@ The two coexist — install whichever fits your workflow.
 npm run setup                # installs root + client + vscode-extension deps
 npm run build                # builds the React client
 npm run desktop:install      # installs Electron + electron-builder
-npm run desktop:dmg          # produces desktop/release/ClaudeCodeMonitor-*.dmg
-open desktop/release/ClaudeCodeMonitor-*-universal.dmg
+
+# Build the DMG — pick one:
+npm run desktop:dmg:arm64    # Apple Silicon only — FAST (~1 min); use this for your own Mac
+npm run desktop:dmg:x64      # Intel only — FAST
+npm run desktop:dmg          # universal (x64 + arm64) — SLOW; for distributing one DMG to everyone
+
+open desktop/release/ClaudeCodeMonitor-*.dmg
 ```
+
+> **The universal `desktop:dmg` build is intentionally slow.** It builds the app
+> twice (once per architecture), merges both slices with `@electron/universal`,
+> and code-signs every binary — gigabytes of disk I/O, and the silent
+> `packaging arch=universal` step can run for several minutes. For running on
+> **your own Mac**, use the arch-specific command (`desktop:dmg:arm64` /
+> `desktop:dmg:x64`) — it finishes in about a minute. CI builds the universal
+> DMG for you and uploads it as the `ClaudeCodeMonitor-dmg` artifact, so you
+> rarely need to build it locally.
 
 ## What happens when you launch the app
 
@@ -107,6 +124,8 @@ When you're ready to make this go away for everyone, add these three repository 
 
 Optionally, also `CSC_LINK` (base64-encoded `.p12`) and `CSC_KEY_PASSWORD` to provide an explicit Developer ID certificate from outside the runner keychain. The CI workflow picks them up automatically — no code change required. See [`desktop/scripts/notarize.js`](desktop/scripts/notarize.js) for the hook.
 
+> Local builds are **always ad-hoc signed**: the `package` script sets `CSC_IDENTITY_AUTO_DISCOVERY=false`, so a code-signing certificate already in your macOS keychain is never auto-discovered (an Apple Development cert would otherwise be picked up and fail distribution-type signing). Real signing activates only through the explicit `CSC_LINK` certificate above — that path is unaffected by the flag.
+
 ## Development workflow
 
 ```bash
@@ -117,9 +136,18 @@ npm run desktop:dev
 # Smoke test (also runs in CI on macOS):
 npm run desktop:test
 
-# Full DMG (slow — invokes electron-builder, universal binary):
+# Single-architecture DMG — fast (~1 min):
+npm run desktop:dmg:arm64    # or desktop:dmg:x64 for Intel
+
+# Universal DMG — slow (builds + signs both architectures, then merges):
 npm run desktop:dmg
 ```
+
+> After `npm run clean` in `desktop/`, you must `npm run build` again before
+> packaging — `clean` removes `out/`, and `electron-builder` only packages, it
+> does not compile. The `desktop:dmg*` scripts chain the build for you; a bare
+> `electron-builder` call does not, and fails with
+> _"entry file out/main.js does not exist"_.
 
 The smoke test does not exercise the BrowserWindow (no display on headless CI). It spawns Electron, waits for the embedded server to answer `/api/health`, then shuts down. Anything that depends on the renderer is part of the manual QA checklist on the PR.
 
@@ -127,7 +155,7 @@ The smoke test does not exercise the BrowserWindow (no display on headless CI). 
 
 - **Bundle size** ≈ 80 MB DMG, ≈ 250 MB on disk. The standard Electron tax. Tauri would cut this dramatically but at the cost of a sidecar-process model and a Rust toolchain dependency — fair to revisit in a follow-up PR if bundle size becomes a real complaint.
 - **Native modules**: `better-sqlite3` is rebuilt against Electron's Node version automatically via `electron-builder install-app-deps` in the desktop workspace's `postinstall`. If that fails for any reason, the server falls back to `node:sqlite` (per #37), so the app still boots.
-- **Universal binary**: the DMG contains both x64 and arm64 slices. Use `arch` in `electron-builder.yml` to switch to a single architecture if you want to halve the size.
+- **Universal binary**: `npm run desktop:dmg` produces a DMG containing both x64 and arm64 slices, which is slow to build. `npm run desktop:dmg:arm64` and `npm run desktop:dmg:x64` build a single-architecture DMG instead — much faster, and roughly half the size.
 - **Auto-update**: not wired in v1. The current update path is *re-download the latest DMG*. `electron-updater` + GitHub Releases is the natural follow-up.
 
 ## Troubleshooting
@@ -139,3 +167,6 @@ The smoke test does not exercise the BrowserWindow (no display on headless CI). 
 | Tray icon missing | The OS hides tray icons when the menu bar is full | Move other menu-bar items aside, or look in the overflow chevron |
 | App didn't auto-start at login | Login Items entry got revoked by macOS | Toggle *Open at Login* off and on again from the tray menu |
 | Port 4820 already in use, app refuses to start | Something other than the dashboard is on 4820 and it doesn't answer `/api/health` | The app will pick a fallback (4821–4829, then a random high port) — check the tray menu's port indicator |
+| `desktop:dmg` seems stuck at `packaging arch=universal` | Not stuck — the universal merge is genuinely slow | Wait a few minutes, or build a single architecture with `desktop:dmg:arm64` / `desktop:dmg:x64` |
+| Build fails: `entry file out/main.js does not exist` | `electron-builder` was run without compiling TypeScript first | Build via `npm run desktop:dmg*` (chains the build); don't invoke `electron-builder` bare |
+| Signing fails: `Application … could not be found` after retries | A keychain code-signing certificate was auto-discovered | Fixed — the `package` script sets `CSC_IDENTITY_AUTO_DISCOVERY=false`; build via `npm run desktop:dmg*` |

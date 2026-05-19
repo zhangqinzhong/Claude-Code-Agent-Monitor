@@ -2213,6 +2213,7 @@
           <a href="#showcase" data-section="showcase" class="nav-link">Showcase</a>
           <a href="#who" data-section="who" class="nav-link">Built for</a>
           <a href="#install" data-section="install" class="nav-link">Install</a>
+          <a href="#desktop" data-section="desktop" class="nav-link">Desktop app</a>
           <a href="#stack" data-section="stack" class="nav-link">Stack</a>
           <a href="#faq" data-section="faq" class="nav-link">FAQ</a>
           <a href="wiki/" class="nav-wiki" target="_blank" rel="noopener noreferrer">
@@ -2285,6 +2286,7 @@
       <a href="#showcase" data-mp data-section="showcase">Showcase</a>
       <a href="#who" data-mp data-section="who">Built for</a>
       <a href="#install" data-mp data-section="install">Install</a>
+      <a href="#desktop" data-mp data-section="desktop">Desktop app</a>
       <a href="#stack" data-mp data-section="stack">Stack</a>
       <a href="#faq" data-mp data-section="faq">FAQ</a>
       <div class="mobile-panel-divider"></div>
@@ -2653,6 +2655,15 @@
               Full dashboard sidebar inside VS Code. Monitor active sessions, view agents, and
               track tool calls without leaving your editor. Ships as a VSIX with zero external
               dependencies.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon violet">🍎</div>
+            <h3>macOS desktop app</h3>
+            <p>
+              The whole dashboard as a native macOS <code>.app</code>, built with Electron 35. It
+              embeds the Express server in-process, lives in the menu bar, auto-starts at login,
+              and installs Claude Code hooks on first boot - zero-setup monitoring.
             </p>
           </div>
         </div>
@@ -3164,6 +3175,119 @@
         </div>
       </section>
 
+      <!-- ─── DESKTOP APP ───────────────────────────────── -->
+      <section id="desktop" class="container">
+        <div class="reveal">
+          <div class="section-eyebrow">macOS desktop app</div>
+          <h2 class="section-title">Install it once, forget the terminal.</h2>
+          <p class="section-lead">
+            Prefer not to keep a terminal open? The dashboard also ships as a native macOS
+            <code>.app</code> - an Electron 35 shell that embeds the same Express server
+            in-process and renders the built React client in a native window. Same dashboard,
+            macOS-native lifecycle on top.
+          </p>
+        </div>
+        <div class="how-grid reveal-stagger">
+          <div class="how-step">
+            <div class="how-step-num">01</div>
+            <h4>Native, menu-bar-first</h4>
+            <p>
+              A menu-bar (tray) icon, a native macOS application menu, single-instance lock, and
+              window-close-hides-but-server-keeps-running. Quit cleanly shuts the embedded server
+              down.
+            </p>
+          </div>
+          <div class="how-step">
+            <div class="how-step-num">02</div>
+            <h4>Auto-start at login</h4>
+            <p>
+              Toggle <em>Open at Login</em> from the tray menu - it registers through macOS's
+              native Login Items, so the dashboard is always running when you sit down.
+            </p>
+          </div>
+          <div class="how-step">
+            <div class="how-step-num">03</div>
+            <h4>Zero-setup hooks</h4>
+            <p>
+              On first boot the app installs Claude Code hooks and starts background services
+              automatically - a DMG-only user gets monitoring with essentially no manual setup.
+            </p>
+          </div>
+          <div class="how-step">
+            <div class="how-step-num">04</div>
+            <h4>macOS only, for now</h4>
+            <p>
+              v1 targets macOS. The DMG is ad-hoc signed, so Gatekeeper warns on first launch -
+              one command clears it (see below). Windows and Linux are out of scope for now.
+            </p>
+          </div>
+        </div>
+        <div class="install reveal">
+          <div class="install-text">
+            <h3>Get it in two ways.</h3>
+            <p>
+              <strong>Download a pre-built DMG</strong> - grab the
+              <code>ClaudeCodeMonitor-dmg</code> artifact from a GitHub Actions run's Artifacts -
+              or <strong>build it locally</strong> with the commands shown. The arch-specific
+              builds (<code>arm64</code> / <code>x64</code>) finish in about a minute; the
+              universal <code>desktop:dmg</code> build is intentionally slow (it builds twice and
+              merges both architectures), so use it only for release artifacts. The DMG is
+              roughly 80&nbsp;MB, about 250&nbsp;MB installed.
+            </p>
+            <a href="DESKTOP.md" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              Full desktop app guide
+            </a>
+            <a
+              href="desktop/README.md"
+              class="btn btn-tertiary"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+              Architecture reference
+            </a>
+          </div>
+          <div class="code-window">
+            <div class="code-window-bar">
+              <span class="traffic red"></span>
+              <span class="traffic yellow"></span>
+              <span class="traffic green"></span>
+              <span class="code-window-title">~/Claude-Code-Agent-Monitor - zsh</span>
+              <button class="code-window-copy" onclick="copyInstall(this)" aria-label="Copy desktop build commands">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span class="copy-label">Copy</span>
+              </button>
+            </div>
+            <pre class="code-block" id="desktop-block"><span class="comment"># Build the macOS .app locally</span>
+<span class="prompt">$</span>npm run setup
+<span class="prompt">$</span>npm run build
+<span class="prompt">$</span>npm run desktop:install
+
+<span class="comment"># Fast - one architecture (recommended for your own Mac)</span>
+<span class="prompt">$</span>npm run desktop:dmg:arm64   <span class="comment"># Apple Silicon</span>
+<span class="prompt">$</span>npm run desktop:dmg:x64     <span class="comment"># Intel</span>
+
+<span class="comment"># Universal build - x64 + arm64, correct for release, SLOW</span>
+<span class="prompt">$</span>npm run desktop:dmg
+
+<span class="comment"># Open the DMG, drag the app to Applications, then clear</span>
+<span class="comment"># the Gatekeeper quarantine on first launch:</span>
+<span class="prompt">$</span>xattr -cr <span class="str">"/Applications/Claude Code Monitor.app"</span>
+</pre>
+          </div>
+        </div>
+      </section>
+
       <!-- ─── PAGES ─────────────────────────────────────── -->
       <section id="pages" class="container">
         <div class="reveal">
@@ -3393,6 +3517,27 @@
                 backup-named one. Writes are atomic via temp file + rename. Plugins, MCP servers,
                 hooks-in-settings, and live <code>settings.json</code> files are intentionally
                 read-only because they have concurrent-write races with the running CLI.
+              </p>
+            </div></div>
+          </details>
+          <details class="faq-item">
+            <summary>Is there a desktop app, and how is it different from running the server?</summary>
+            <div class="faq-answer"><div class="faq-answer-inner">
+              <p>
+                Yes - a native macOS <code>.app</code> built with Electron 35. It embeds the same
+                Express server in-process and renders the built React client in a native window,
+                so it is the same dashboard with macOS-native lifecycle on top: a menu-bar icon,
+                a native app menu, auto-start at login, a single-instance lock, and
+                window-close-hides-but-server-keeps-running. It also installs Claude Code hooks
+                and starts background services on first boot, so you get monitoring with
+                essentially zero manual setup. Get it by downloading the
+                <code>ClaudeCodeMonitor-dmg</code> CI artifact or building locally with
+                <code>npm run desktop:dmg:arm64</code> / <code>:x64</code> (fast) or
+                <code>npm run desktop:dmg</code> (universal, slow). The DMG is ad-hoc signed, so
+                clear Gatekeeper on first launch with
+                <code>xattr -cr "/Applications/Claude Code Monitor.app"</code>. macOS only for
+                now - see the
+                <a href="DESKTOP.md" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">desktop app guide</a>.
               </p>
             </div></div>
           </details>
@@ -3828,12 +3973,19 @@
       window.addEventListener("resize", updateActive, { passive: true });
       updateActive();
       function copyInstall(btn) {
-        const text = `git clone https://github.com/hoangsonww/Claude-Code-Agent-Monitor
+        const defaultText = `git clone https://github.com/hoangsonww/Claude-Code-Agent-Monitor
 cd Claude-Code-Agent-Monitor
 npm run setup
 npm run install-hooks
 npm run dev
 # then open http://localhost:4820`;
+        // Prefer the actual rendered code block this button belongs to, so the
+        // Install and Desktop-app code windows each copy their own commands.
+        const win = btn.closest(".code-window");
+        const block = win ? win.querySelector(".code-block") : null;
+        const text = block
+          ? block.innerText.replace(/^\$\s?/gm, "").replace(/^→\s?/gm, "").trimEnd()
+          : defaultText;
         const label = btn.querySelector(".copy-label");
         const svgEl = btn.querySelector("svg");
         const copySvg = '<rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />';
