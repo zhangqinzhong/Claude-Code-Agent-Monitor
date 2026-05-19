@@ -10,16 +10,21 @@
  *      DMG would ship a 404-only dashboard.
  *   3. Asset PNGs exist (or we leave a clear warning — icons can be
  *      regenerated via scripts/build-icons.sh).
+ *   4. The desktop-local better-sqlite3 native binary matches this machine's
+ *      CPU architecture. A prior `electron-builder --mac --x64/--arm64` build
+ *      rebuilds it for the target arch; left mismatched it breaks `desktop:dev`
+ *      and `desktop:test` with ERR_DLOPEN_FAILED. We rebuild it if so.
  */
 
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
+const desktopRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(__dirname, "..", "..");
 const clientDist = path.join(repoRoot, "client", "dist");
 const rootNodeModules = path.join(repoRoot, "node_modules");
-const assets = path.resolve(__dirname, "..", "assets");
+const assets = path.join(desktopRoot, "assets");
 
 function run(cmd, args, opts = {}) {
   const result = spawnSync(cmd, args, { stdio: "inherit", ...opts });
@@ -44,6 +49,36 @@ if (!fs.existsSync(trayIcon)) {
   console.warn(
     "[prebuild] WARN: tray-icon-Template.png missing. Run `npm run build:icons` to regenerate from assets/icon.svg."
   );
+}
+
+// Heal a better-sqlite3 native binary left built for the wrong CPU arch by a
+// prior `electron-builder --mac --x64/--arm64` run. Without this, `desktop:dev`
+// and `desktop:test` fail to load the module (ERR_DLOPEN_FAILED) until the
+// contributor manually re-runs `npm run desktop:install`.
+if (process.platform === "darwin") {
+  const bsNode = path.join(
+    desktopRoot,
+    "node_modules",
+    "better-sqlite3",
+    "build",
+    "Release",
+    "better_sqlite3.node"
+  );
+  if (fs.existsSync(bsNode)) {
+    const desc = spawnSync("file", ["-b", bsNode], { encoding: "utf8" }).stdout || "";
+    // A universal binary works on both arches; only act on a clear mismatch.
+    const universal = /universal/i.test(desc);
+    const wrongArch =
+      !universal &&
+      ((process.arch === "arm64" && !/arm64/.test(desc)) ||
+        (process.arch === "x64" && !/x86_64/.test(desc)));
+    if (wrongArch) {
+      console.log(
+        "[prebuild] better-sqlite3 is built for the wrong CPU arch (a prior DMG build left it that way) — rebuilding for this machine…"
+      );
+      run("npx", ["electron-builder", "install-app-deps"], { cwd: desktopRoot });
+    }
+  }
 }
 
 console.log("[prebuild] ok");
