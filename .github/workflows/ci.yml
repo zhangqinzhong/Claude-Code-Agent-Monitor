@@ -147,8 +147,34 @@ jobs:
       - name: Smoke test
         run: cd desktop && npm test
 
+      - name: Quiet Spotlight (reduces flaky hdiutil detach)
+        # Spotlight indexing a freshly-mounted DMG volume is the usual cause of
+        # electron-builder's `hdiutil detach` failing as "busy". Disabling it on
+        # the ephemeral runner is harmless.
+        run: sudo mdutil -a -i off || true
+
       - name: Build DMG
-        run: cd desktop && npm run dmg
+        # electron-builder finalizes the DMG by running `hdiutil detach` on the
+        # temp build volume, which is intermittently flaky on GitHub macOS
+        # runners ("unable to execute hdiutil ... detach"). Retry the whole
+        # build, force-detaching any stale volume between attempts.
+        run: |
+          cd desktop
+          for attempt in 1 2 3; do
+            echo "::group::DMG build attempt ${attempt}/3"
+            if npm run dmg; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "DMG build attempt ${attempt} failed; detaching stale volumes"
+            for vol in "/Volumes/Claude Code Monitor"*; do
+              [ -d "${vol}" ] && hdiutil detach -force "${vol}" || true
+            done
+            sleep 10
+          done
+          echo "DMG build failed after 3 attempts" >&2
+          exit 1
         env:
           # If these are set as repo secrets, electron-builder will sign +
           # notarize automatically via desktop/scripts/notarize.js.
