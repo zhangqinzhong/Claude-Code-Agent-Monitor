@@ -70,6 +70,8 @@ open desktop/release/ClaudeCodeMonitor-*.dmg
 - **Login Items toggle:** flip *Open at Login* in the tray menu (or the app menu). It registers via macOS's `SMAppService` API — you'll see the entry under  → *System Settings → General → Login Items*.
 - **Single-instance:** double-launching just focuses the existing window. No second server, no port collision.
 - **Logs** live at `~/Library/Logs/Claude Code Monitor/desktop.log` (use *Show Logs* in the menu to open the folder).
+- **Your data** (the SQLite database and VAPID keys) lives in `~/Library/Application Support/Claude Code Monitor/data/` — outside the app bundle, so it **survives app reinstalls and updates**.
+- **The `claude` CLI** is resolved using your login-shell `PATH`, recovered at startup — so "Run Claude" works even though a Finder/Dock-launched app would otherwise only inherit a minimal `PATH`.
 
 ## File layout (for contributors)
 
@@ -86,6 +88,7 @@ desktop/
 │   ├── tray.ts                 # menu-bar icon + context menu
 │   ├── menu.ts                 # native application menu
 │   ├── login-item.ts           # macOS Login Items toggle
+│   ├── shell-path.ts           # recover the user's shell PATH (find `claude`)
 │   ├── preload.ts              # (empty — kept for future renderer bridges)
 │   ├── logger.ts               # file logger
 │   └── constants.ts
@@ -169,4 +172,7 @@ The smoke test does not exercise the BrowserWindow (no display on headless CI). 
 | Port 4820 already in use, app refuses to start | Something other than the dashboard is on 4820 and it doesn't answer `/api/health` | The app will pick a fallback (4821–4829, then a random high port) — check the tray menu's port indicator |
 | `desktop:dmg` seems stuck at `packaging arch=universal` | Not stuck — the universal merge is genuinely slow | Wait a few minutes, or build a single architecture with `desktop:dmg:arm64` / `desktop:dmg:x64` |
 | Build fails: `entry file out/main.js does not exist` | `electron-builder` was run without compiling TypeScript first | Build via `npm run desktop:dmg*` (chains the build); don't invoke `electron-builder` bare |
+| Signing fails with `Application … could not be found` | A code-signing certificate in your keychain was auto-discovered | Fixed — the `package` script sets `CSC_IDENTITY_AUTO_DISCOVERY=false`; build via `npm run desktop:dmg*` |
+| "Run Claude" reports the `claude` CLI isn't on your PATH | A Finder/Dock-launched app inherits launchd's minimal PATH, not your shell PATH | Fixed — the app recovers your login-shell PATH at startup. If it persists, ensure `claude` is a real executable (not a shell alias/function) and on your shell PATH |
+| Imported history / sessions vanished after updating the app | Older builds stored the database inside the (replaceable) app bundle | Fixed — data now lives in `~/Library/Application Support/Claude Code Monitor/data/` and survives reinstalls. After upgrading from a pre-fix build, re-run **Import History → Rescan** once |
 | Signing fails: `Application … could not be found` after retries | A keychain code-signing certificate was auto-discovered | Fixed — the `package` script sets `CSC_IDENTITY_AUTO_DISCOVERY=false`; build via `npm run desktop:dmg*` |

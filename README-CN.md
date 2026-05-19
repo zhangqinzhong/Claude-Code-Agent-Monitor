@@ -1273,6 +1273,8 @@ flowchart TD
 - **开机自启开关：** 在托盘菜单（或应用菜单）中切换*开机自启*。它通过 macOS 的 `SMAppService` / `ServiceManagement` 框架注册 —— 你会在  → *系统设置 → 通用 → 登录项* 中看到该条目。当 macOS 在登录时启动应用时，应用以**仅托盘模式**启动并隐藏 Dock 图标，不会有窗口突然弹到用户面前。
 - **单实例锁：** 重复启动只会聚焦已有窗口，不会产生第二个服务器，也不会发生端口冲突。
 - **「在浏览器中打开」「重启服务器」「查看日志」** 均可从托盘菜单直接触发。日志位于 `~/Library/Logs/Claude Code Monitor/desktop.log`（菜单中的*查看日志*会打开该文件夹）。
+- **你的数据**（SQLite 数据库与 VAPID 密钥）保存在 `~/Library/Application Support/Claude Code Monitor/data/` —— 位于 `.app` 包**之外**，因此能够**在应用重装与更新后继续保留**。早期的构建曾把数据库存放在 `.app` 包内部，而已安装、已签名（或经过 app-translocation）的包是只读的，这会导致「历史导入」（History Import）失败 —— 该问题现已修复。
+- **`claude` CLI** 通过你登录 Shell 的 `PATH` 解析，应用在启动时会恢复该 `PATH` —— 因此即便从 Finder/Dock 启动的 macOS 应用通常只会继承 launchd 提供的极简 `PATH`，「运行 Claude」（Run Claude）功能依然能找到并启动 `claude` CLI。
 
 ### 构建命令
 
@@ -1298,12 +1300,21 @@ flowchart TD
 ### 原生模块与签名
 
 - **`better-sqlite3`**：依赖树中唯一的原生模块。桌面工作区在 `postinstall` 中通过 `electron-builder install-app-deps` 为 Electron 的 ABI 重新编译一份桌面专用的 `better-sqlite3`，因此不会干扰仓库根目录为系统 Node 构建的那一份（`npm run test:server` 仍可用）。若重新编译失败，服务器会回退到 Node 内置的 `node:sqlite`，应用依然能启动。
+- **贡献者注意**：构建 DMG 会针对目标架构重新编译 `better-sqlite3`，可能让其不再匹配本机 CPU 架构。桌面应用的预构建（prebuild）步骤会自动为本机修复（auto-heal）这一情况，因此后续的 `desktop:dev` / `desktop:test` 无需手动处理。
 - **代码签名**：DMG 默认**临时签名**（`package` 脚本设置 `CSC_IDENTITY_AUTO_DISCOVERY=false`，确保不会误用钥匙串里已有的证书）。提供 `CSC_LINK`（base64 编码的 `.p12`）与 `CSC_KEY_PASSWORD` 时启用真正的 **Developer ID 签名**。
 - **公证（notarization）**：可选启用。当 `APPLE_ID`、`APPLE_TEAM_ID`、`APPLE_APP_SPECIFIC_PASSWORD` 三者都设置时，`desktop/scripts/notarize.js`（`electron-builder` 的 `afterSign` 钩子）会执行公证；否则它什么也不做。
 
 ### 持续集成
 
 `.github/workflows/ci.yml` 中的 `🍎 macOS Desktop (DMG)` 作业运行在 `macos-latest` 上，并经过**路径过滤**：一个 `changes` 作业（`dorny/paths-filter`）检测 `desktop/**` 的改动；该桌面作业也会在任何 `push` 时、或 PR 带有 `desktop` 标签时运行。作业会执行 `npm ci`、`tsc` 构建、冒烟测试，构建**通用版 DMG**（对偶发的 `hdiutil detach` 失败会重试），并将结果上传为 `ClaudeCodeMonitor-dmg` 产物供工作流运行下载。
+
+### 桌面应用故障排查
+
+| 现象 | 原因 / 解决方法 |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 「运行 Claude」提示 `claude` 不在 PATH 上 | 从 Finder/Dock 启动的应用只会继承 launchd 的极简 `PATH`，而非你的 Shell `PATH`。已修复 —— 应用在启动时会恢复登录 Shell 的 `PATH`。若问题仍存在，请确认 `claude` 是真正的可执行文件（而非 Shell 别名或函数），并位于你的 Shell `PATH` 上 |
+| 更新应用后导入的历史 / 会话消失 | 早期构建把数据库存放在（可被替换的）`.app` 包内部。已修复 —— 数据现保存在 `~/Library/Application Support/Claude Code Monitor/data/`，可在重装与更新后保留。从修复前的旧版本升级后，请再执行一次 **Import History → Rescan** |
+| `desktop:dev` / `desktop:test` 报 `ERR_DLOPEN_FAILED` | 之前的 DMG 构建留下了为另一 CPU 架构编译的 `better-sqlite3`。预构建步骤会在下次构建时自动修复；如有需要可运行 `npm run desktop:install` |
 
 更多细节请参阅面向用户的 [`DESKTOP.md`](./DESKTOP.md)，以及面向贡献者 / 架构的 [`desktop/README.md`](./desktop/README.md)。
 

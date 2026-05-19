@@ -4044,6 +4044,51 @@ ccam-export all --output backup.json</code></pre>
             </div>
           </div>
 
+          <h3>Data Persistence &amp; CLI Reliability</h3>
+          <p>
+            Two macOS packaging realities — a read-only <code>.app</code> bundle and the
+            minimal <code>PATH</code> a Finder-launched app inherits — are handled
+            automatically so installs survive updates and the <strong>Run Claude</strong>
+            feature works out of the box.
+          </p>
+
+          <div class="callout callout-info">
+            <div class="callout-icon">ℹ</div>
+            <div class="callout-body">
+              <strong>Your data survives reinstalls and updates</strong>
+              <p>
+                The SQLite database and VAPID keys live in
+                <code>~/Library/Application Support/Claude Code Monitor/data/</code> —
+                <em>outside</em> the <code>.app</code> bundle. <code>server-host.ts</code>
+                points <code>DASHBOARD_DATA_DIR</code> at that per-user directory on boot.
+                Because a packaged, code-signed, or app-translocated bundle is read-only,
+                older builds that stored the database inside the bundle broke History
+                Import; with the data directory now in Application Support, your imported
+                history and events persist across app reinstalls and updates. After
+                upgrading from a pre-fix build, re-run <strong>Import History → Rescan</strong>
+                once to bridge the one-time gap.
+              </p>
+            </div>
+          </div>
+
+          <div class="callout callout-info">
+            <div class="callout-icon">ℹ</div>
+            <div class="callout-body">
+              <strong>The <code>claude</code> CLI is found automatically</strong>
+              <p>
+                A Finder- or Dock-launched macOS app inherits only launchd's minimal
+                <code>PATH</code>, not your login shell's. At startup
+                <code>shell-path.ts</code> recovers the user's login-shell <code>PATH</code>
+                so the <strong>Run Claude</strong> feature can locate and spawn the
+                <code>claude</code> CLI. If it still cannot be found, make sure
+                <code>claude</code> is a real executable on your shell <code>PATH</code> — a
+                shell alias or function cannot be spawned — and check the
+                <code>user PATH resolved</code> line in
+                <code>~/Library/Logs/Claude Code Monitor/desktop.log</code>.
+              </p>
+            </div>
+          </div>
+
           <h3>Port Discovery</h3>
           <p>
             On launch the Electron main process picks a free port. If a healthy dashboard

@@ -1853,6 +1853,7 @@ flowchart LR
 | **`window.ts`** | `BrowserWindow` with persisted geometry (`userData/window-state.json`). External links open in the system browser. |
 | **`menu.ts` / `tray.ts`** | Native application menu and menu-bar (tray) icon. The tray menu is rebuilt on each open so the port label and `Open at Login` checkbox stay current. |
 | **`login-item.ts`** | macOS Login Items toggle via Electron's first-party `app.setLoginItemSettings` (wraps `SMAppService`) -- not a `LaunchAgent` plist. |
+| **`shell-path.ts`** | Recovers the user's login-shell `PATH` at startup and merges it onto `process.env.PATH`, so the embedded server (and the `claude` CLI it spawns) is not limited to launchd's minimal `PATH`. |
 | **`logger.ts`** | File logger to `~/Library/Logs/Claude Code Monitor/desktop.log` (the main process has no console when launched from Finder). |
 
 `server-host.ts` resolves the directory containing the bundled `server/` and `client/dist/` via `resolveAppRoot()`: `process.resourcesPath/app` when packaged, or the repo root (one directory up from `desktop/`) in development.
@@ -1901,7 +1902,24 @@ flowchart TD
     style fail fill:#da3633,stroke:#b62324,color:#fff
 ```
 
-Port preference order is **4820 → 4821–4829 → a random port in 49152–49500**. Two environment overrides exist primarily for testing: `CCAM_DESKTOP_BIND_PORT` binds an exact port (disabling adoption and fallback, used by the smoke test), and `CCAM_DESKTOP_NO_ADOPT=1` always starts a fresh server. Before `require()`ing the server module, the host sets `NODE_ENV=production` and `DASHBOARD_PORT=<port>` so the server reads the chosen port from `process.env`.
+Port preference order is **4820 → 4821–4829 → a random port in 49152–49500**. Two environment overrides exist primarily for testing: `CCAM_DESKTOP_BIND_PORT` binds an exact port (disabling adoption and fallback, used by the smoke test), and `CCAM_DESKTOP_NO_ADOPT=1` always starts a fresh server. Before `require()`ing the server module, the host sets `NODE_ENV=production`, `DASHBOARD_PORT=<port>`, and `DASHBOARD_DATA_DIR=<userData>/data` (see [Writable Data Directory](#writable-data-directory) below) so the server reads them from `process.env`.
+
+### Writable Data Directory
+
+A packaged `.app` bundle is **read-only**: once installed under `/Applications`, code-signed, or run through macOS **app translocation**, `Resources/app/` cannot be written to. The dashboard's SQLite database and the VAPID keypair (`server/lib/push.js`) are writable state, so they must not live inside the bundle. Before booting the embedded server, `server-host.ts` creates `app.getPath('userData')/data` and points the server at it via the `DASHBOARD_DATA_DIR` environment variable:
+
+- `server/db.js` honors `DASHBOARD_DATA_DIR` for the SQLite file.
+- `server/lib/push.js` honors it for the persisted VAPID keys.
+
+The resulting location is `~/Library/Application Support/Claude Code Monitor/data/`. Because this lives outside the bundle, imported history and persisted events **survive an app reinstall or update**. Without this, writing a database into `Resources/app/` failed on a packaged build and broke History Import and event persistence.
+
+The standalone `node server/index.js` path is **unaffected**: `DASHBOARD_DATA_DIR` is unset there, and `server-host.ts` only sets it when it is not already defined -- so `server/db.js` falls back to its usual repo-relative default.
+
+### Shell `PATH` Recovery
+
+A macOS app launched from Finder, the Dock, or Login Items auto-start is spawned by `launchd`, which hands it a **minimal `PATH`** (roughly `/usr/bin:/bin:/usr/sbin:/sbin`) and does **not** source the user's shell profile. The dashboard's "Run Claude" feature (`server/routes/run.js`, `server/lib/run-spawner.js`) spawns the `claude` CLI, which is almost always installed somewhere only the shell `PATH` knows about (`/opt/homebrew/bin`, `~/.local/bin`, `~/.claude/local`, a Node version-manager's bin dir). Under launchd's `PATH`, `claude` cannot be resolved or spawned.
+
+`shell-path.ts` repairs this **before the server boots**: at startup it runs the user's login+interactive shell once (`$SHELL -ilc`, so `.zprofile`/`.zshrc` are sourced), captures the resulting `PATH` between sentinel markers, and merges it -- plus a fallback list of common CLI install directories -- onto `process.env.PATH`. The merge is order-preserving and deduplicated, so it is idempotent. Because the embedded server runs in the same process, it and every `claude` it spawns inherit the corrected `PATH`. (A `claude` shell _alias_ or _function_ still cannot be spawned -- only a real executable on the `PATH` can.)
 
 ### `better-sqlite3` Native-Module Handling
 
@@ -1981,10 +1999,11 @@ sequenceDiagram
     alt lock not acquired
         Main->>OS: exit(0) — focus existing instance
     end
+    Main->>Host: ensureUserPath() — recover login-shell PATH
     Main->>Host: startEmbeddedServer()
     Host->>Host: probe :4820 — adopt if a healthy server answers
     alt no server to adopt
-        Host->>Host: pickFreePort() · patch better-sqlite3 ABI
+        Host->>Host: pickFreePort() · set DASHBOARD_DATA_DIR · patch better-sqlite3 ABI
         Host->>Srv: require() · createApp() · startServer(port)
         Host->>Srv: waitForHealthy() — poll /api/health ≤ 30s
         Host->>Srv: bootstrapOwnedServer() — schedulers, cc-watcher, install hooks
@@ -2032,7 +2051,9 @@ flowchart TD
     style appdir fill:#238636,stroke:#196c2e,color:#fff
 ```
 
-At runtime `server-host.ts` resolves this root as `process.resourcesPath/app` when packaged. `electron-builder` produces a **universal** (x64 + arm64) DMG, ad-hoc signed by default so anyone can build a working `.dmg` without a paid Apple Developer account; real Developer ID signing and notarization are opt-in via environment variables (`CSC_LINK`, `APPLE_ID`, etc.). CI runs a path-filtered `🍎 macOS Desktop (DMG)` job on `macos-latest`. See [`desktop/README.md`](./desktop/README.md) for the full build pipeline, build-performance notes, and signing details.
+At runtime `server-host.ts` resolves this root as `process.resourcesPath/app` when packaged. Everything under `Resources/app/` is **read-only** on a packaged, signed, or app-translocated bundle -- so all writable state (the SQLite database, VAPID keys) lives in `~/Library/Application Support/Claude Code Monitor/data/`, **never inside the bundle** (see [Writable Data Directory](#writable-data-directory)).
+
+`electron-builder` produces a **universal** (x64 + arm64) DMG, ad-hoc signed by default so anyone can build a working `.dmg` without a paid Apple Developer account; real Developer ID signing and notarization are opt-in via environment variables (`CSC_LINK`, `APPLE_ID`, etc.). CI runs a path-filtered `🍎 macOS Desktop (DMG)` job on `macos-latest`. The `desktop/scripts/prebuild.js` guard also **self-heals** a `better-sqlite3` native binary that a prior cross-arch DMG build (`electron-builder --mac --x64/--arm64`) left compiled for the wrong CPU architecture -- it detects the mismatch via `file` and re-runs `electron-builder install-app-deps`, so `desktop:dev` and `desktop:test` do not fail with `ERR_DLOPEN_FAILED`. See [`desktop/README.md`](./desktop/README.md) for the full build pipeline, build-performance notes, and signing details.
 
 ### Relation to Standalone Deployment
 

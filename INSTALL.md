@@ -239,6 +239,9 @@ open desktop/release/ClaudeCodeMonitor-*.dmg
 
 Once running, the embedded server boots on port `4820` (or adopts an already-healthy server on `4820`, or falls back to `4821`–`4829` / a random high port), a menu-bar icon appears, and the dashboard window opens. **Hooks are installed automatically on first boot** — a DMG-only user does not need `npm run install-hooks`; just start a new Claude Code session. Closing the window hides it but keeps the server running; **Quit** from the tray exits.
 
+> [!NOTE]
+> The packaged app stores its SQLite database and VAPID keys in `~/Library/Application Support/Claude Code Monitor/data/` — **outside** the `.app` bundle. Your imported history and events therefore **survive app reinstalls and updates**. (Older builds kept the database inside the bundle, which is read-only once installed and code-signed — that broke History Import; it is now fixed. If you are upgrading from a pre-fix build, there is a one-time data gap: re-run **Settings → Import History → Rescan** once.)
+
 Full user guide: [`DESKTOP.md`](DESKTOP.md). Contributor / architecture reference: [`desktop/README.md`](desktop/README.md). Desktop-specific setup details (logs, auto-start, port adoption) are in [SETUP.md → Desktop App Setup](./SETUP.md#desktop-app-setup).
 
 ---
@@ -460,6 +463,8 @@ See [SETUP.md — Troubleshooting](./SETUP.md#troubleshooting) for detailed hook
 | `npm run desktop:dmg` hangs on `packaging arch=universal` | Not hung — the universal build merges two architectures and is intentionally slow | Wait it out, or use `npm run desktop:dmg:arm64` / `npm run desktop:dmg:x64` for a fast single-arch build |
 | `entry file out/main.js does not exist` | `npm run clean` (in `desktop/`) deleted `out/`; `electron-builder` only packages, it does not compile | Re-run `npm run desktop:build` (or just use a `desktop:dmg*` script, which chains the build) |
 | Desktop window opens but is blank | The embedded server failed `/api/health` within 30 s | Check `~/Library/Logs/Claude Code Monitor/desktop.log`, then tray → *Restart Server* |
+| "Run Claude" says `claude` is not on your PATH | A Finder/Dock-launched macOS app only inherits launchd's minimal PATH, not your login-shell PATH | The app recovers your login-shell PATH at startup so it can find and spawn the `claude` CLI. If it still fails, make sure `claude` is a real executable on your shell PATH — not a shell alias or function |
+| Imported history vanished after updating the app | Older builds stored the database inside the (replaceable) `.app` bundle | Fixed — data now lives in `~/Library/Application Support/Claude Code Monitor/data/` and survives reinstalls/updates. After upgrading from a pre-fix build, re-run **Settings → Import History → Rescan** once |
 
 ---
 

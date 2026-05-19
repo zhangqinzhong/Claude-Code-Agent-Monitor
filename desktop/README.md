@@ -394,6 +394,7 @@ desktop/
 │   ├── menu.ts          # native application menu
 │   ├── tray.ts          # menu-bar icon + context menu
 │   ├── login-item.ts    # macOS Login Items (SMAppService)
+│   ├── shell-path.ts    # recover the user's shell PATH (so `claude` is found)
 │   ├── logger.ts        # file logger → app.getPath('logs')/desktop.log
 │   ├── constants.ts     # APP_NAME, ports, timeouts, window size
 │   └── preload.ts       # intentionally empty (zero renderer privilege)
@@ -692,6 +693,9 @@ Reach it from the tray menu → **Show Logs**.
 | Dashboard window is blank | The embedded server failed `/api/health` within 30 s — check `desktop.log`. |
 | Gatekeeper blocks the app | Ad-hoc DMG. `xattr -cr "/Applications/Claude Code Monitor.app"`. |
 | Hooks not firing | The app installs hooks on first owned-server boot; start a **new** Claude Code session afterwards. Verify entries in `~/.claude/settings.json`. |
+| "Run Claude" says `claude` isn't on your PATH | `shell-path.ts` recovers the login-shell PATH at startup. If `claude` is a shell _alias_ or _function_ (not a real binary), it cannot be spawned — install the `claude` CLI as an executable. Check `desktop.log` for the `user PATH resolved` line. |
+| `desktop:dev` / `desktop:test` fail with `ERR_DLOPEN_FAILED` | A prior DMG build left `better-sqlite3` built for the other CPU arch. `prebuild.js` auto-heals this on the next build; if needed, run `npm run desktop:install`. |
+| Imported history disappeared after reinstall | Fixed — the database now lives in `~/Library/Application Support/Claude Code Monitor/data/`, outside the bundle. A one-time gap exists only across the upgrade from a build that predated this fix; re-run **Import History → Rescan**. |
 
 ---
 

@@ -1239,10 +1239,15 @@ flowchart TD
 - **Khóa một-phiên-bản** — khởi chạy lần hai chỉ đưa cửa sổ hiện có lên trước, không có máy chủ thứ hai, không xung đột cổng.
 - **Tự khởi động lúc đăng nhập** — bật/tắt *Open at Login* trong trình đơn tray. Nó đăng ký qua API `SMAppService` của macOS, nên mục này xuất hiện trong **System Settings → General → Login Items** đúng nơi người dùng mong đợi. Khi macOS khởi chạy ứng dụng lúc đăng nhập, ứng dụng bắt đầu ở chế độ **chỉ-tray** — không có cửa sổ nhảy ra trước mặt.
 - **Nhật ký** nằm tại `~/Library/Logs/Claude Code Monitor/desktop.log` (dùng *Show Logs* trong trình đơn để mở thư mục).
+- **Dữ liệu của bạn** (cơ sở dữ liệu SQLite và khóa VAPID) nằm tại `~/Library/Application Support/Claude Code Monitor/data/` — bên ngoài gói `.app`, nên dữ liệu **sống sót qua các lần cài lại và cập nhật ứng dụng**. `server-host.ts` trỏ `DASHBOARD_DATA_DIR` vào thư mục này, vì một gói `.app` đã đóng gói/ký mã (hoặc bị app-translocation) là chỉ-đọc — một cơ sở dữ liệu ghi bên trong gói sẽ phá vỡ History Import và việc lưu sự kiện. Các bản dựng cũ lưu cơ sở dữ liệu bên trong gói `.app`; lỗi này nay đã được sửa.
+- **CLI `claude`** được phân giải bằng `PATH` của login-shell, được khôi phục lúc khởi động — nên tính năng "Run Claude" hoạt động dù một ứng dụng macOS khởi chạy từ Finder/Dock vốn chỉ thừa hưởng `PATH` tối thiểu của launchd.
 
 ### Module gốc `better-sqlite3`
 
 `better-sqlite3` là module **gốc** duy nhất trong cây phụ thuộc, và một module gốc phải được biên dịch theo đúng ABI Node mà nó chạy trên đó. Workspace `desktop/` đi kèm một bản sao `better-sqlite3` cục bộ được dựng lại cho ABI của Electron (qua `electron-builder install-app-deps` trong `postinstall`), không động đến bản cài ở thư mục gốc dùng cho `npm run test:server`. Nếu việc dựng lại thất bại, máy chủ vẫn quay về dùng `node:sqlite` tích hợp sẵn nên ứng dụng vẫn khởi động được.
+
+> [!MẸO]
+> **Dành cho người đóng góp:** dựng một DMG sẽ dựng lại `better-sqlite3` cho kiến trúc đích, nên một bản dựng DMG trước đó có thể để lại `better-sqlite3` được dựng cho CPU khác (khiến `desktop:dev` / `desktop:test` lỗi `ERR_DLOPEN_FAILED`). Bước prebuild của ứng dụng máy tính để bàn (`scripts/prebuild.js`) tự chữa lại cho máy cục bộ ở lần build kế tiếp; nếu cần, hãy chạy `npm run desktop:install`.
 
 ### Lệnh xây dựng
 
@@ -1857,6 +1862,8 @@ agent-dashboard/
 | WebSocket bị ngắt kết nối            | Máy khách tự động kết nối lại sau mỗi 2 giây. Kiểm tra xem cổng 4820 có bị tường lửa chặn không                                                                    |
 | Dữ liệu cũ sau khi khởi động lại          | Cơ sở dữ liệu vẫn tồn tại trong suốt quá trình khởi động lại. Chạy `npm run seed` để có dữ liệu demo mới hoặc xóa `data/dashboard.db` để đặt lại                                            |
 | Công cụ MCP không kết nối được         | Xác nhận API bảng điều khiển đã hoạt động trên `MCP_DASHBOARD_BASE_URL` và xây dựng lại/khởi động MCP (`npm run mcp:build`, `npm run mcp:start`)                                         |
+| "Run Claude" báo `claude` không có trong PATH | Một ứng dụng macOS khởi chạy từ Finder/Dock chỉ thừa hưởng `PATH` tối thiểu của launchd. Lỗi này đã được sửa — ứng dụng khôi phục `PATH` của login-shell lúc khởi động. Nếu vẫn còn, hãy chắc chắn `claude` là một tệp thực thi thật (không phải alias/hàm shell) và nằm trên `PATH` của shell |
+| Lịch sử đã nhập biến mất sau khi cài lại/cập nhật ứng dụng máy tính để bàn | Các bản dựng cũ lưu cơ sở dữ liệu bên trong gói `.app` có thể bị thay thế. Lỗi này đã được sửa — dữ liệu nay nằm tại `~/Library/Application Support/Claude Code Monitor/data/`, bên ngoài gói và sống sót qua các lần cài lại. Sau khi nâng cấp từ bản dựng trước khi sửa lỗi, hãy chạy lại **Import History → Rescan** một lần |
 
 ---
 

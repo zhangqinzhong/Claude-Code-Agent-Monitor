@@ -1255,7 +1255,7 @@ The dashboard also ships as an optional **native macOS application** — a singl
 Everything you see in the browser at `localhost:4820` lives inside this window, with macOS-native lifecycle on top: a menu-bar (tray) icon, a native application menu, Login Items integration for auto-start, and a single quit button that cleanly shuts the server down.
 
 > [!NOTE]
-> The desktop app is **macOS only** for now. Windows/Linux builds and an in-app auto-updater are tracked as follow-ups — Electron makes them straightforward, but each needs its own QA. The current upgrade path is to re-download the latest DMG.
+> The desktop app is **macOS only** for now. Windows/Linux builds and an in-app auto-updater are tracked as follow-ups — Electron makes them straightforward, but each needs its own QA. The current upgrade path is to re-download the latest DMG; your data is stored outside the `.app` bundle, so it persists across reinstalls and updates.
 
 ### How it works
 
@@ -1291,8 +1291,9 @@ On launch the app:
 1. Picks a free port — preferring **4820**, falling back to **4821–4829**, then a random high port if all of those are taken.
 2. If a healthy dashboard server already answers `/api/health` on `4820` (e.g. you ran `npm start` in a terminal), it **adopts that server** instead of double-binding — no port collision, no SQLite contention. An adopted server keeps running after you quit the app.
 3. Otherwise it boots the embedded server, and on **first owned-server boot** auto-installs the Claude Code hooks and starts the background services (update scheduler, `cc-watcher`, orphaned-run reconciliation). A DMG-only user therefore gets events flowing with **zero manual setup** — no checkout, no `npm run install-hooks`.
-4. Opens the dashboard window (unless macOS launched the app at login, in which case it stays tray-only).
-5. On quit, shuts the embedded server down gracefully and **closes SQLite cleanly** (WAL checkpoint).
+4. Recovers your **login-shell `PATH`** so the **Run Claude** feature can find and spawn the `claude` CLI — a Finder/Dock-launched app otherwise inherits only launchd's minimal `PATH` and would miss CLIs in `~/.local/bin`, `/opt/homebrew/bin`, version-manager bins, etc.
+5. Opens the dashboard window (unless macOS launched the app at login, in which case it stays tray-only).
+6. On quit, shuts the embedded server down gracefully and **closes SQLite cleanly** (WAL checkpoint).
 
 ### Features
 
@@ -1301,6 +1302,8 @@ On launch the app:
 - **Auto-start at login** — toggle **Open at Login** from the tray or app menu. It registers through macOS's modern `SMAppService` API, so the entry appears under **System Settings → General → Login Items** where users expect it.
 - **Window-close hides, server keeps running** — closing the window just hides it; the server and tray stay up. Click the tray to bring the window back.
 - **Single-instance lock** — double-launching simply focuses the existing window; no second server, no port collision.
+- **Data survives reinstalls and updates** — the SQLite database and VAPID keys live in `~/Library/Application Support/Claude Code Monitor/data/`, **outside the `.app` bundle**. Because a packaged, code-signed, or app-translocated bundle is read-only, writing the database there would break History Import and event persistence — keeping it in Application Support fixes that and means your imported history is untouched when you replace or upgrade the app.
+- **`claude` CLI on PATH** — the app recovers your login-shell `PATH` at startup, so the **Run Claude** feature works even though a Finder/Dock-launched app would otherwise only inherit launchd's minimal `PATH`.
 - **Logs** — the main process writes to `~/Library/Logs/Claude Code Monitor/desktop.log`; reach it from the tray menu's **Show Logs**.
 
 ### Get it
@@ -1356,6 +1359,7 @@ The DMG is **ad-hoc signed** by default so anyone can build a working `.app` wit
 ### Implementation notes
 
 - **`better-sqlite3`** is the only native module in the dependency tree, and a native module must be compiled against the exact Node ABI it runs on. The `desktop/` workspace ships its **own copy** of `better-sqlite3` rebuilt for Electron's ABI and uses a process-local `require` redirect to point `server/db.js` at it; the repo-root copy stays built for system Node (so `npm run test:server` keeps working).
+- **Building a DMG rebuilds `better-sqlite3` for the target architecture**, which can leave the desktop copy built for the other CPU arch and break `npm run desktop:dev` / `npm run desktop:test` with `ERR_DLOPEN_FAILED`. The desktop `prebuild` step now **auto-heals** the native module for the local machine on the next build, so the dev and smoke-test flows keep working after an arch-specific DMG build.
 - The **only change outside `desktop/`** is a behavior-preserving refactor of `server/index.js`: its post-listen bootstrap (update scheduler, `cc-watcher`, orphaned-run reconciliation) was extracted into an exported `startBackgroundServices()` so the embedded server runs exactly what `node server/index.js` runs. The standalone `node server/index.js` path is functionally unchanged; `client/`, `scripts/`, `mcp/`, and `vscode-extension/` are untouched.
 - A path-filtered **`🍎 macOS Desktop (DMG)`** CI job on `macos-latest` builds, smoke-tests, and packages the universal DMG, then uploads it as the `ClaudeCodeMonitor-dmg` artifact.
 

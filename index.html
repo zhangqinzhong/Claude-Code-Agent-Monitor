@@ -3207,10 +3207,15 @@
           </div>
           <div class="how-step">
             <div class="how-step-num">03</div>
-            <h4>Zero-setup hooks</h4>
+            <h4>Zero-setup, durable data</h4>
             <p>
               On first boot the app installs Claude Code hooks and starts background services
               automatically - a DMG-only user gets monitoring with essentially no manual setup.
+              Your SQLite database lives in
+              <code>~/Library/Application Support/Claude Code Monitor/data/</code>, outside the
+              <code>.app</code> bundle, so it survives reinstalls and updates. The app also
+              recovers your login-shell <code>PATH</code> at startup, so <em>Run Claude</em> can
+              find and launch the <code>claude</code> CLI.
             </p>
           </div>
           <div class="how-step">
@@ -3535,8 +3540,11 @@
                 <code>npm run desktop:dmg:arm64</code> / <code>:x64</code> (fast) or
                 <code>npm run desktop:dmg</code> (universal, slow). The DMG is ad-hoc signed, so
                 clear Gatekeeper on first launch with
-                <code>xattr -cr "/Applications/Claude Code Monitor.app"</code>. macOS only for
-                now - see the
+                <code>xattr -cr "/Applications/Claude Code Monitor.app"</code>. Your SQLite
+                database lives in <code>~/Library/Application Support/Claude Code Monitor/data/</code>
+                outside the <code>.app</code> bundle, so it survives reinstalls and updates, and the
+                app recovers your shell <code>PATH</code> at startup so <em>Run Claude</em> can
+                launch the <code>claude</code> CLI. macOS only for now - see the
                 <a href="DESKTOP.md" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">desktop app guide</a>.
               </p>
             </div></div>
