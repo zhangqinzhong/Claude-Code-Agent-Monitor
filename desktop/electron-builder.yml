@@ -73,11 +73,13 @@ mac:
   # contributor's keychain is never picked up (it would fail distribution
   # signing). Real Developer ID signing activates only when CSC_LINK (an
   # explicit .p12) is provided — that path is unaffected by the flag.
+  # No `arch:` here on purpose. Pinning the arch list in the config makes
+  # electron-builder build *every* listed architecture regardless of the CLI
+  # flag, so `electron-builder --mac --arm64` would still emit an x64 DMG too.
+  # With arch left unspecified, the `--arm64` / `--x64` / `--universal` flags
+  # the `dmg:*` npm scripts pass are what decide which single DMG is produced.
   target:
-    - target: dmg
-      arch:
-        - x64
-        - arm64
+    - dmg
   extendInfo:
     LSUIElement: false
     NSHighResolutionCapable: true
@@ -85,7 +87,14 @@ mac:
 
 dmg:
   artifactName: "ClaudeCodeMonitor-${version}-${arch}.dmg"
-  title: "Claude Code Monitor ${version}"
+  # The mounted-volume title carries the architecture so that, when a release/
+  # directory holds more than one DMG, the Finder windows are distinguishable
+  # and nobody drags an x64 build onto Apple Silicon (which triggers a Rosetta
+  # prompt). The arch label is NOT set here: the `${arch}` macro expands
+  # inconsistently inside `title` — it yields `-arm64` / an empty string rather
+  # than `arm64` / `x64`. The per-arch `dmg:*` scripts in package.json override
+  # `dmg.title` with an explicit, clean label instead.
+  title: "Claude Code Monitor"
   icon: assets/icon.icns
   contents:
     - x: 130

@@ -3705,7 +3705,7 @@ ccam-export all --output backup.json</code></pre>
           </div>
 
           <p>
-            📖 Full documentation: <a href="docs/PLUGINS.md"><code>docs/plugins.md</code></a>
+            📖 Full documentation: <a href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/blob/master/docs/PLUGINS.md"><code>docs/plugins.md</code></a>
           </p>
         </section>
 
@@ -3908,7 +3908,7 @@ ccam-export all --output backup.json</code></pre>
           </div>
 
           <p>
-            📖 Full developer guide: <a href="vscode-extension/README.md"><code>vscode-extension/README.md</code></a>
+            📖 Full developer guide: <a href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/blob/master/vscode-extension/README.md"><code>vscode-extension/README.md</code></a>
           </p>
         </section>
 
@@ -4130,20 +4130,38 @@ ccam-export all --output backup.json</code></pre>
 
           <h3>How to Get It</h3>
           <p>
-            There are two ways to obtain the desktop app — download a pre-built DMG from CI,
-            or build one locally.
+            Three ways to obtain the desktop app — the latest GitHub Release (best for
+            most users), a per-commit CI artifact (fresher than the latest release), or a
+            local build.
           </p>
 
-          <h4>Option A — download the CI artifact</h4>
+          <h4>Option A — download the latest GitHub Release (recommended)</h4>
           <p>
-            CI runs a path-filtered <code>🍎 macOS Desktop (DMG)</code> job on
-            <code>macos-latest</code> and uploads the built universal DMG as the
-            <code>ClaudeCodeMonitor-dmg</code> artifact. Open the latest passing GitHub
-            Actions run, scroll to <strong>Artifacts</strong>, and download
-            <code>ClaudeCodeMonitor-dmg</code>.
+            Open
+            <a href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest"
+               target="_blank" rel="noopener noreferrer"><strong>Releases → latest</strong></a>
+            and download
+            <code>ClaudeCodeMonitor-&lt;version&gt;-universal.dmg</code> from the
+            assets. The macOS Desktop CI job auto-publishes a new
+            <code>vX.Y.Z</code> release every time the version in
+            <code>package.json</code> is bumped on <code>master</code>, so this link
+            always points at the current build. Releases are public — no GitHub
+            sign-in required.
           </p>
 
-          <h4>Option B — build locally</h4>
+          <h4>Option B — per-commit CI artifact</h4>
+          <p>
+            Want a build straight off the tip of <code>master</code>, ahead of the next
+            tagged release? Every green run of the <code>🍎 macOS Desktop (DMG)</code>
+            job on <code>macos-latest</code> uploads the universal DMG as the
+            <code>ClaudeCodeMonitor-dmg</code> workflow artifact. Open the
+            <a href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/actions/workflows/ci.yml?query=branch%3Amaster+is%3Asuccess"
+               target="_blank" rel="noopener noreferrer">latest passing run</a>,
+            scroll to <strong>Artifacts</strong>, and download
+            <code>ClaudeCodeMonitor-dmg</code>. (Sign-in required, 14-day retention.)
+          </p>
+
+          <h4>Option C — build locally</h4>
           <p>
             From the project root, after <code>git clone</code>:
           </p>
@@ -4162,8 +4180,10 @@ npm run desktop:dmg:arm64    # Apple Silicon only — fast (~1 min), recommended
 npm run desktop:dmg:x64      # Intel only — fast
 npm run desktop:dmg          # universal (x64 + arm64) — for release, SLOW
 
-# The DMG lands in desktop/release/
-open desktop/release/ClaudeCodeMonitor-*.dmg</code></pre>
+# Each desktop:dmg* build wipes release/ first and emits a single arch-labelled
+# DMG, so the volume title states the architecture (e.g. "Claude Code Monitor
+# (Apple Silicon)") — no ambiguity when more than one DMG is on disk.
+open desktop/release/ClaudeCodeMonitor-*-arm64.dmg   # match the arch you built</code></pre>
 
           <div class="callout callout-warning">
             <div class="callout-icon">⚠</div>
@@ -4244,9 +4264,9 @@ xattr -cr "/Applications/Claude Code Monitor.app"</code></pre>
           </div>
 
           <p>
-            📖 User-facing guide: <a href="../DESKTOP.md"><code>DESKTOP.md</code></a> ·
+            📖 User-facing guide: <a href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/blob/master/DESKTOP.md"><code>DESKTOP.md</code></a> ·
             architecture &amp; contributor reference:
-            <a href="../desktop/README.md"><code>desktop/README.md</code></a>
+            <a href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/blob/master/desktop/README.md"><code>desktop/README.md</code></a>
           </p>
         </section>
 

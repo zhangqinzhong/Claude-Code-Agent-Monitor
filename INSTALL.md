@@ -182,18 +182,28 @@ If you'd rather not keep a terminal window open, the project also ships an Elect
 | Downloading a pre-built DMG | macOS — nothing else |
 | Building the DMG locally | macOS, Node.js 18+ (22+ recommended), npm 9+, and **Xcode command-line tools** (`xcode-select --install`) so the native `better-sqlite3` module can be rebuilt for Electron's ABI |
 
-### Way 1 — Download the CI-built DMG
+### Way 1 — Download a pre-built DMG
 
-Every passing CI run uploads a `ClaudeCodeMonitor-dmg` artifact, so you can install the app without building anything.
+The fastest path. There are two flavours:
 
-- **Via the GitHub UI:** open the latest passing run of the `🍎 macOS Desktop (DMG)` job under [Actions](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/actions), scroll to **Artifacts**, and download `ClaudeCodeMonitor-dmg`.
+**1a. From the latest GitHub Release** *(recommended — public, no sign-in)*
+
+Open [**Releases → latest**](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest) and download `ClaudeCodeMonitor-<version>-universal.dmg` from the assets. CI publishes a new `vX.Y.Z` release automatically every time the version in `package.json` is bumped on `master`, so this link always points at the current shipping build.
+
+**1b. From the per-commit CI artifact** *(useful for testing master before it's tagged — sign-in required, 14-day retention)*
+
+Every green run of the `🍎 macOS Desktop (DMG)` workflow uploads a `ClaudeCodeMonitor-dmg` artifact:
+
+- **Via the GitHub UI:** open the latest passing run under [Actions](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/actions/workflows/ci.yml?query=branch%3Amaster+is%3Asuccess), scroll to **Artifacts**, and download `ClaudeCodeMonitor-dmg`.
 - **Via the `gh` CLI:**
 
   ```bash
   gh run download <run-id> -R hoangsonww/Claude-Code-Agent-Monitor -n ClaudeCodeMonitor-dmg
   ```
 
-Unzip the artifact to get `ClaudeCodeMonitor-*-universal.dmg`, then jump to [Install the app](#install-the-app).
+  Unzip the artifact to get `ClaudeCodeMonitor-*-universal.dmg`.
+
+Then jump to [Install the app](#install-the-app).
 
 ### Way 2 — Build the DMG locally
 
@@ -223,8 +233,14 @@ The DMG lands in `desktop/release/`. Pick the build command that matches your go
 
 ### Install the app
 
+Each `desktop:dmg*` build wipes `release/` and emits a single DMG —
+`desktop:dmg:arm64` → `…-arm64.dmg`, `desktop:dmg:x64` → `…-x64.dmg`, universal
+`desktop:dmg` → `…-universal.dmg` — and its mounted-volume title states the
+architecture (e.g. *Claude Code Monitor (Apple Silicon)*). Install the one
+matching your Mac: an x64 build on Apple Silicon makes macOS prompt for Rosetta.
+
 ```bash
-open desktop/release/ClaudeCodeMonitor-*.dmg
+open desktop/release/ClaudeCodeMonitor-*-arm64.dmg   # the arch you built
 ```
 
 1. The DMG mounts — drag **Claude Code Monitor** into your `Applications` folder.

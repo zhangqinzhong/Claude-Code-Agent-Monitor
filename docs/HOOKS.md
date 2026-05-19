@@ -531,6 +531,15 @@ function sendToServer(hookType, payload) {
 }
 ```
 
+> **Port resolution.** The snippet above shows a fixed `4820` for clarity. The
+> real `scripts/hook-handler.js` resolves the port at runtime via
+> `server/lib/server-info.js`: it prefers the `CLAUDE_DASHBOARD_PORT`
+> environment override, then the live `~/.claude/.agent-dashboard.json`
+> discovery file the server writes on startup (ignored if the recording
+> process is no longer alive), and finally falls back to `4820`. This is what
+> lets the macOS desktop app — whose embedded server falls back off 4820 when
+> that port is taken — still receive hook events.
+
 ---
 
 ## Event Processing

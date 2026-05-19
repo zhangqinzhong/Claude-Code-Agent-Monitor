@@ -681,6 +681,16 @@
         font-size: 17px;
         margin: 0 0 48px;
       }
+      .install-subtitle {
+        font-size: clamp(23px, 2.6vw, 31px);
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        font-weight: 700;
+        margin: 0 0 20px;
+      }
+      .install-group {
+        margin-top: 72px;
+      }
       .features-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -2213,7 +2223,6 @@
           <a href="#showcase" data-section="showcase" class="nav-link">Showcase</a>
           <a href="#who" data-section="who" class="nav-link">Built for</a>
           <a href="#install" data-section="install" class="nav-link">Install</a>
-          <a href="#desktop" data-section="desktop" class="nav-link">Desktop app</a>
           <a href="#stack" data-section="stack" class="nav-link">Stack</a>
           <a href="#faq" data-section="faq" class="nav-link">FAQ</a>
           <a href="wiki/" class="nav-wiki" target="_blank" rel="noopener noreferrer">
@@ -2286,7 +2295,6 @@
       <a href="#showcase" data-mp data-section="showcase">Showcase</a>
       <a href="#who" data-mp data-section="who">Built for</a>
       <a href="#install" data-mp data-section="install">Install</a>
-      <a href="#desktop" data-mp data-section="desktop">Desktop app</a>
       <a href="#stack" data-mp data-section="stack">Stack</a>
       <a href="#faq" data-mp data-section="faq">FAQ</a>
       <div class="mobile-panel-divider"></div>
@@ -3094,7 +3102,7 @@
             <h4>Monitor without leaving the editor</h4>
             <p>
               Use the VS Code extension sidebar to watch sessions and tool calls while you code.
-              No browser tab needed — everything docks into VS Code as a side panel.
+              No browser tab needed - everything docks into VS Code as a side panel.
             </p>
             <div class="archetype-tags">
               <span class="archetype-tag">VS Code</span>
@@ -3115,6 +3123,12 @@
             up immediately because the dashboard auto-installs its hooks into your existing
             <code>~/.claude/settings.json</code>.
           </p>
+        </div>
+
+        <!-- ─── WEB APP ───────────────────────────────────── -->
+        <div class="reveal">
+          <div class="section-eyebrow">Web app</div>
+          <h3 class="install-subtitle">Run it from your browser.</h3>
         </div>
         <div class="install reveal">
           <div class="install-text">
@@ -3173,13 +3187,11 @@
 </pre>
           </div>
         </div>
-      </section>
 
-      <!-- ─── DESKTOP APP ───────────────────────────────── -->
-      <section id="desktop" class="container">
-        <div class="reveal">
-          <div class="section-eyebrow">macOS desktop app</div>
-          <h2 class="section-title">Install it once, forget the terminal.</h2>
+        <!-- ─── macOS APP ──────────────────────────────────── -->
+        <div class="reveal install-group">
+          <div class="section-eyebrow">macOS app</div>
+          <h3 class="install-subtitle">Install it once, forget the terminal.</h3>
           <p class="section-lead">
             Prefer not to keep a terminal open? The dashboard also ships as a native macOS
             <code>.app</code> - an Electron 35 shell that embeds the same Express server
@@ -3227,19 +3239,61 @@
             </p>
           </div>
         </div>
-        <div class="install reveal">
+        <div class="install reveal install-group">
           <div class="install-text">
             <h3>Get it in two ways.</h3>
             <p>
-              <strong>Download a pre-built DMG</strong> - grab the
-              <code>ClaudeCodeMonitor-dmg</code> artifact from a GitHub Actions run's Artifacts -
-              or <strong>build it locally</strong> with the commands shown. The arch-specific
-              builds (<code>arm64</code> / <code>x64</code>) finish in about a minute; the
-              universal <code>desktop:dmg</code> build is intentionally slow (it builds twice and
-              merges both architectures), so use it only for release artifacts. The DMG is
-              roughly 80&nbsp;MB, about 250&nbsp;MB installed.
+              <strong>Download a pre-built DMG - no build required.</strong> Hit the
+              button below to land on the <strong>latest GitHub Release</strong>; grab
+              the universal <code>ClaudeCodeMonitor-&lt;version&gt;-universal.dmg</code>
+              from its assets and drag the app into <code>/Applications</code>. The link
+              always redirects to the current release because CI publishes a new
+              <code>vX.Y.Z</code> automatically every time the version in
+              <code>package.json</code> is bumped on <code>master</code>. Releases are
+              public - no GitHub sign-in required.
             </p>
-            <a href="DESKTOP.md" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+            <p>
+              Want a <strong>per-commit build from CI</strong> instead of waiting for a
+              release? The macOS Desktop (DMG) workflow uploads a
+              <code>ClaudeCodeMonitor-dmg</code> artifact on every green run - useful
+              for testing master before it's tagged. Or
+              <strong>build it yourself</strong>: arch-specific builds
+              (<code>arm64</code> / <code>x64</code>) finish in about a minute, while
+              the universal <code>desktop:dmg</code> build is intentionally slow (it
+              builds twice and merges both architectures), so reserve it for release
+              artifacts. The DMG is roughly 80&nbsp;MB, about 250&nbsp;MB installed.
+            </p>
+            <a
+              href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest"
+              class="btn btn-primary"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Download the latest release
+            </a>
+            <a
+              href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/actions/workflows/ci.yml?query=branch%3Amaster+is%3Asuccess"
+              class="btn btn-tertiary"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <polyline points="12 7 12 12 15 14" />
+              </svg>
+              Per-commit CI builds
+            </a>
+            <a
+              href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/blob/master/DESKTOP.md"
+              class="btn btn-tertiary"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
@@ -3247,7 +3301,7 @@
               Full desktop app guide
             </a>
             <a
-              href="desktop/README.md"
+              href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/blob/master/desktop/README.md"
               class="btn btn-tertiary"
               target="_blank"
               rel="noopener noreferrer"
@@ -3299,7 +3353,7 @@
           <div class="section-eyebrow">Tour the dashboard</div>
           <h2 class="section-title">A purpose-built page for every job.</h2>
           <p class="section-lead">
-            Each route is its own focused workspace — kanban for at-a-glance status, sessions for
+            Each route is its own focused workspace - kanban for at-a-glance status, sessions for
             drill-down, analytics for trends, run for live spawning. They all sit on the same
             hook-driven event store, so what you see anywhere is the same source of truth.
           </p>
@@ -3318,7 +3372,7 @@
               <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Kanban</span></div>
               <code class="page-card-route">/kanban</code>
             </div>
-            <p class="page-card-desc">Drag-free swim lanes by agent status — waiting, working, completed, error, abandoned.</p>
+            <p class="page-card-desc">Drag-free swim lanes by agent status - waiting, working, completed, error, abandoned.</p>
             <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#ss-sessions" class="page-card" style="--page-accent: var(--cyan)" target="_blank" rel="noopener noreferrer">
@@ -3350,7 +3404,7 @@
               <div class="page-card-title"><span class="page-card-dot"></span><span class="page-card-name">Analytics</span></div>
               <code class="page-card-route">/analytics</code>
             </div>
-            <p class="page-card-desc">Cost trends, model mix, tool usage, error rates, productivity heatmaps — 11 datasets.</p>
+            <p class="page-card-desc">Cost trends, model mix, tool usage, error rates, productivity heatmaps - 11 datasets.</p>
             <svg class="page-card-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 5 7 7-7 7"/></svg>
           </a>
           <a href="wiki/#ss-workflows" class="page-card" style="--page-accent: var(--rose)" target="_blank" rel="noopener noreferrer">
@@ -3545,7 +3599,7 @@
                 outside the <code>.app</code> bundle, so it survives reinstalls and updates, and the
                 app recovers your shell <code>PATH</code> at startup so <em>Run Claude</em> can
                 launch the <code>claude</code> CLI. macOS only for now - see the
-                <a href="DESKTOP.md" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">desktop app guide</a>.
+                <a href="https://github.com/hoangsonww/Claude-Code-Agent-Monitor/blob/master/DESKTOP.md" target="_blank" rel="noopener noreferrer" style="color: var(--accent);">desktop app guide</a>.
               </p>
             </div></div>
           </details>
@@ -3573,7 +3627,7 @@
               <p>
                 See every session, agent, and tool call as it happens. Spawn and resume Claude from
                 your browser. Inspect every plugin, skill, hook, and setting in 12 tabs. All on
-                your machine — no telemetry, no signup, no cloud.
+                your machine - no telemetry, no signup, no cloud.
               </p>
               <div class="big-cta-buttons">
                 <a href="#install" class="btn btn-primary">

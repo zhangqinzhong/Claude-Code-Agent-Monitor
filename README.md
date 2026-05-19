@@ -344,12 +344,12 @@ Creates 8 sample sessions, 23 agents, and 106 events so you can explore the UI i
 
 If you'd rather not keep a terminal open, install the optional **native macOS desktop app**. It embeds the server in-process, adds a menu-bar (tray) icon, and supports auto-start at login via native Login Items.
 
-The fastest path is to **download the pre-built DMG** — grab the `ClaudeCodeMonitor-dmg` artifact from the latest passing CI run, then mount it and drag **Claude Code Monitor.app** into `/Applications`. To build it yourself instead:
+The fastest path is to **download the pre-built DMG** — grab `ClaudeCodeMonitor-<version>-universal.dmg` from the [latest GitHub Release](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest) (CI auto-publishes a `vX.Y.Z` whenever `package.json` is bumped on `master`), then drag **Claude Code Monitor.app** into `/Applications`. Per-commit fresh builds also live as the `ClaudeCodeMonitor-dmg` artifact on every green CI run. To build it yourself instead:
 
 ```bash
 npm run desktop:install        # install Electron + electron-builder into desktop/
 npm run desktop:dmg:arm64      # fast single-arch DMG for your own Mac (Apple Silicon)
-open desktop/release/ClaudeCodeMonitor-*.dmg
+open desktop/release/ClaudeCodeMonitor-*-arm64.dmg   # open the arch you built
 ```
 
 Full coverage of the desktop app — download, install, tray/menu features, build commands, and signing — is in the [macOS Desktop App](#macos-desktop-app) section below. See also [`DESKTOP.md`](./DESKTOP.md) (user guide) and [`desktop/README.md`](./desktop/README.md) (architecture).
@@ -1308,7 +1308,10 @@ On launch the app:
 
 ### Get it
 
-**Option A — download the pre-built DMG (recommended).** Every CI run on `macos-latest` builds the universal DMG and uploads it as the **`ClaudeCodeMonitor-dmg`** artifact, so you rarely need to build locally. Download that artifact (or the DMG attached to a GitHub release).
+**Option A — download the pre-built DMG (recommended).** Two flavours:
+
+- **[Releases → latest](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest)** — public, no GitHub sign-in. CI auto-publishes a new `vX.Y.Z` release whenever the version in `package.json` is bumped on `master`, so this link always serves the current build.
+- **Per-commit CI artifact** — every green run of the `🍎 macOS Desktop (DMG)` job uploads `ClaudeCodeMonitor-dmg` (sign-in required, 14-day retention) — useful for testing master before the next release tag.
 
 **Option B — build it yourself.** From the repo root:
 
@@ -1316,7 +1319,7 @@ On launch the app:
 npm run setup                # install root + client deps, build client, install hooks
 npm run build                # build the React client (client/dist)
 npm run desktop:install      # install Electron + electron-builder into desktop/
-npm run desktop:dmg:arm64    # fast single-arch DMG → desktop/release/ClaudeCodeMonitor-*.dmg
+npm run desktop:dmg:arm64    # fast single-arch DMG → desktop/release/ClaudeCodeMonitor-<ver>-arm64.dmg
 ```
 
 > [!WARNING]

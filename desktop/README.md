@@ -236,6 +236,13 @@ interface ServerHandle {
 }
 ```
 
+**Hook port discovery** — because the embedded server may bind a fallback port
+(4821+) when 4820 is taken, the Claude Code hook handler must not assume 4820.
+On startup the server writes its live port to `~/.claude/.agent-dashboard.json`
+(`server/lib/server-info.js`); `scripts/hook-handler.js` reads that file to
+target the running server. Without this, hook events would be POSTed to 4820 —
+nothing would receive them and the dashboard would stay empty.
+
 ---
 
 ## `better-sqlite3` native-module handling
@@ -604,8 +611,10 @@ flowchart LR
     j2 --> j3["smoke test"]
     j3 --> j4["build universal DMG<br/>(retry on flaky hdiutil detach)"]
     j4 --> j5["upload ClaudeCodeMonitor-dmg artifact"]
+    j5 --> rel["release job (master only)<br/>publish vX.Y.Z if new"]
 
     style job fill:#1f6feb,stroke:#1158c7,color:#fff
+    style rel fill:#238636,stroke:#1a6e2c,color:#fff
 ```
 
 - The job is **path-filtered** — a `changes` job (`dorny/paths-filter`)
@@ -617,6 +626,11 @@ flowchart LR
   force-detaching any stale volume between attempts.
 - The built DMG is uploaded as the **`ClaudeCodeMonitor-dmg`** artifact
   (downloadable from the workflow run).
+- On `master`, a follow-on **`release`** job reads the version from
+  `package.json` and publishes `vX.Y.Z` as a GitHub Release with the DMG
+  attached — but only when no release exists for that version yet, so bumping
+  the version is what cuts a release. The result is a permanent, anonymous
+  download URL at `releases/latest`.
 
 ---
 
@@ -701,15 +715,31 @@ Reach it from the tray menu → **Show Logs**.
 
 ## What this workspace does *not* touch
 
-By design, changes outside `desktop/` are kept to a minimum. The **one
-exception** is `server/index.js`: its post-listen bootstrap was extracted into
-an exported `startBackgroundServices()` so the embedded server boots the same
-update scheduler, `cc-watcher`, and orphaned-run reconciliation that
-`node server/index.js` does. This is a **behavior-preserving refactor** — the
-standalone server path is functionally unchanged.
+By design, changes outside `desktop/` are kept to a minimum:
 
-`client/`, `scripts/`, `mcp/`, and `vscode-extension/` are **untouched**. If you
-find yourself wanting to edit those, that belongs in a separate PR.
+- **`server/index.js`** — its post-listen bootstrap was extracted into an
+  exported `startBackgroundServices()` so the embedded server boots the same
+  one-time legacy-session import, update scheduler, `cc-watcher`, and
+  orphaned-run reconciliation that `node server/index.js` does. A
+  **behavior-preserving refactor** — the standalone server path is functionally
+  unchanged. (The legacy-session import previously lived in the
+  `require.main === module` block, so the embedded server never ran it and the
+  desktop dashboard started empty; moving it into `startBackgroundServices()`
+  fixes that.) The server also publishes its live port on startup.
+- **`server/lib/server-info.js`** *(new)* — writes/reads the
+  `~/.claude/.agent-dashboard.json` port discovery file.
+- **`scripts/hook-handler.js`** — resolves the dashboard port from that
+  discovery file, so hook events reach the server even when it bound a fallback
+  port instead of 4820.
+- **`server/lib/push.js`** — `sendPushToAll()` now also fires a **native
+  Electron notification** when `process.versions.electron` is set, so the
+  desktop app surfaces notifications via the OS API instead of relying on Web
+  Push (which fails inside Electron — no FCM credentials in the Chromium
+  build). The standalone server path is unchanged: the native leg is a no-op
+  there, and Web Push delivers as before.
+
+`client/`, `mcp/`, and `vscode-extension/` are **untouched**. If you find
+yourself wanting to edit those, that belongs in a separate PR.
 
 ---
 

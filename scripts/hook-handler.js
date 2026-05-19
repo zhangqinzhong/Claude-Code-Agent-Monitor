@@ -11,7 +11,26 @@
 const http = require("http");
 
 const hookType = process.argv[2] || "unknown";
-const port = parseInt(process.env.CLAUDE_DASHBOARD_PORT || "4820", 10);
+
+/**
+ * Resolve the dashboard server port. The conventional port is 4820, but the
+ * desktop app's embedded server falls back to the next free port when 4820 is
+ * already taken (e.g. by an SSH tunnel) and records its live port in a
+ * discovery file. Prefer that file so events always reach the running server;
+ * fall back to the CLAUDE_DASHBOARD_PORT override or 4820 if discovery is
+ * unavailable for any reason. This must never throw — the handler stays
+ * fail-safe so it can never block Claude Code.
+ */
+function resolvePort() {
+  try {
+    return require("../server/lib/server-info").resolveDashboardPort();
+  } catch {
+    const envPort = parseInt(process.env.CLAUDE_DASHBOARD_PORT || "", 10);
+    return Number.isInteger(envPort) && envPort > 0 ? envPort : 4820;
+  }
+}
+
+const port = resolvePort();
 
 let input = "";
 

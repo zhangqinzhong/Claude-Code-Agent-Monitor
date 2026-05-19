@@ -393,8 +393,8 @@ Nếu bạn không muốn giữ một cửa sổ terminal mở, hãy cài đặt
 
 ```bash
 npm run desktop:install
-npm run desktop:dmg:arm64      # → desktop/release/ClaudeCodeMonitor-*.dmg (nhanh, cho máy của bạn)
-open desktop/release/ClaudeCodeMonitor-*.dmg
+npm run desktop:dmg:arm64      # → desktop/release/ClaudeCodeMonitor-<ver>-arm64.dmg (nhanh, cho máy của bạn)
+open desktop/release/ClaudeCodeMonitor-*-arm64.dmg   # mở đúng kiến trúc bạn vừa dựng
 ```
 
 Toàn bộ chi tiết, ngữ nghĩa vòng đời, các bước cài đặt và hook ký/công chứng nằm trong mục [Ứng dụng máy tính để bàn macOS](#ứng-dụng-máy-tính-để-bàn-macos) và [`DESKTOP.md`](./DESKTOP.md).
@@ -1183,9 +1183,9 @@ PWA giúp cài đặt bảng điều khiển trong các trình duyệt nền Chr
 
 ### Cài đặt nhanh
 
-**Cách A — tải DMG dựng sẵn từ CI:**
+**Cách A — tải DMG dựng sẵn (khuyến nghị):**
 
-1. Tải artifact **`ClaudeCodeMonitor-dmg`** từ lần chạy CI thành công gần nhất (job `🍎 macOS Desktop (DMG)`) hoặc từ trang Releases của GitHub.
+1. Mở [**Releases → latest**](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest) và tải `ClaudeCodeMonitor-<version>-universal.dmg` từ phần assets. Mỗi khi bản cập nhật `version` trong `package.json` được đẩy lên `master`, CI tự động phát hành một `vX.Y.Z` mới, nên liên kết này luôn trỏ đến bản build hiện tại (công khai, không cần đăng nhập GitHub). Nếu cần **bản build theo từng commit**, dùng artifact `ClaudeCodeMonitor-dmg` mà job `🍎 macOS Desktop (DMG)` tải lên trên mỗi lần CI xanh (cần đăng nhập, lưu giữ 14 ngày).
 2. Mở (mount) tệp `.dmg`, rồi kéo `Claude Code Monitor.app` vào thư mục `Applications` của bạn.
 3. Mở ứng dụng. macOS có thể hiện cảnh báo Gatekeeper trong lần chạy đầu tiên — xem mục [Gatekeeper](#gatekeeper-lần-chạy-đầu-tiên) bên dưới.
 
@@ -1196,8 +1196,8 @@ PWA giúp cài đặt bảng điều khiển trong các trình duyệt nền Chr
 npm run setup                # cài phụ thuộc root + client + vscode-extension
 npm run build                # build ứng dụng React
 npm run desktop:install      # cài Electron + electron-builder
-npm run desktop:dmg:arm64    # tạo desktop/release/ClaudeCodeMonitor-*.dmg (nhanh)
-open desktop/release/ClaudeCodeMonitor-*.dmg
+npm run desktop:dmg:arm64    # tạo desktop/release/ClaudeCodeMonitor-<ver>-arm64.dmg (nhanh)
+open desktop/release/ClaudeCodeMonitor-*-arm64.dmg   # mở đúng kiến trúc bạn vừa dựng
 ```
 
 > [!QUAN TRỌNG]

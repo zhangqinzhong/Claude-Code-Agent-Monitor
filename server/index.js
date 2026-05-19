@@ -35,6 +35,7 @@ const http = require("http");
 const swaggerUi = require("swagger-ui-express");
 const { initWebSocket } = require("./websocket");
 const { createOpenApiSpec } = require("./openapi");
+const { writeServerInfo, removeServerInfo } = require("./lib/server-info");
 
 const sessionsRouter = require("./routes/sessions");
 const agentsRouter = require("./routes/agents");
@@ -105,6 +106,10 @@ function startServer(app, port) {
 
   return new Promise((resolve) => {
     server.listen(port, () => {
+      // Publish the live port so the Claude Code hook handler can find this
+      // server even when it bound a non-default port (the desktop app falls
+      // back off 4820 when that port is already taken).
+      writeServerInfo(port);
       const mode = isProduction ? "production" : "development";
       console.log(`Agent Dashboard server running on http://localhost:${port} (${mode})`);
       if (!isProduction) {
@@ -116,9 +121,60 @@ function startServer(app, port) {
 }
 
 /**
+ * One-time bootstrap import of legacy Claude Code sessions from `~/.claude/`.
+ *
+ * Runs at most once per data directory, tracked by a `.legacy-import.done`
+ * marker file written next to the database. A marker — rather than an "is the
+ * DB empty?" check — is essential: the desktop app captures a live session via
+ * hooks before the user ever thinks about history, so an emptiness check would
+ * see a non-empty DB and skip the backfill forever, leaving every pre-existing
+ * session missing from the dashboard. The import itself is idempotent
+ * (per-session dedup), so running it against a DB that already holds some
+ * sessions simply adds the missing ones.
+ *
+ * Fire-and-forget — the server does not await it. It lives in its own function
+ * (rather than inline in the `require.main` block, where it used to sit) so
+ * embedded hosts that call `startBackgroundServices()` — notably the desktop
+ * app — get the same first-launch backfill instead of an empty dashboard.
+ */
+function autoImportLegacySessions() {
+  try {
+    const fs = require("fs");
+    const dbModule = require("./db");
+    const markerPath = path.join(path.dirname(dbModule.DB_PATH), ".legacy-import.done");
+    if (fs.existsSync(markerPath)) return;
+
+    const { importAllSessions, backfillCompactions } = require("../scripts/import-history");
+    importAllSessions(dbModule)
+      .then(({ imported, errors }) => {
+        if (imported > 0) console.log(`Imported ${imported} legacy sessions from ~/.claude/`);
+        if (errors > 0) console.log(`${errors} session files had errors during import`);
+      })
+      .then(() => backfillCompactions(dbModule))
+      .then(({ backfilled }) => {
+        if (backfilled > 0)
+          console.log(`Backfilled ${backfilled} compaction events from ~/.claude/`);
+      })
+      // Write the marker only after the import completes, so a crash mid-import
+      // retries on the next start instead of being skipped forever.
+      .then(() => {
+        try {
+          fs.writeFileSync(markerPath, `${new Date().toISOString()}\n`);
+        } catch {
+          /* non-fatal — worst case the (idempotent) import re-runs next start */
+        }
+      })
+      .catch(() => {});
+  } catch (err) {
+    console.warn("legacy session auto-import failed:", err.message);
+  }
+}
+
+/**
  * Start the background services the dashboard relies on once the HTTP server
- * is listening: the upstream update scheduler, the Claude Code config watcher,
- * and a one-time reconciliation of orphaned run rows.
+ * is listening: a one-time legacy-session import, the upstream update
+ * scheduler, the Claude Code config watcher, and a one-time reconciliation of
+ * orphaned run rows.
  *
  * Exported so alternative hosts can bring up the same services the standalone
  * `node server/index.js` path does. The desktop Electron shell `require()`s
@@ -126,6 +182,9 @@ function startServer(app, port) {
  * `require.main === module` block below never executes for it.
  */
 function startBackgroundServices() {
+  // One-time legacy-session backfill (a no-op once its marker file exists).
+  autoImportLegacySessions();
+
   const { startUpdateScheduler } = require("./update-scheduler");
   const { broadcast } = require("./websocket");
   startUpdateScheduler({ broadcast });
@@ -179,6 +238,10 @@ if (require.main === module) {
     } catch {
       /* already closed */
     }
+    // Drop the port discovery file so a later run on a different port is not
+    // shadowed by a stale entry. (A crash skips this — the PID-liveness check
+    // in resolveDashboardPort() is the backstop for that case.)
+    removeServerInfo();
     // Give in-flight work 5s to finish, then force exit
     setTimeout(() => process.exit(0), 5000).unref();
   };
@@ -291,25 +354,9 @@ if (require.main === module) {
     }
   }, SWEEP_INTERVAL_MS);
 
-  // Auto-import legacy sessions and backfill compaction tracking on startup.
-  // Skipped when DB already has sessions — the import is a one-time bootstrap
-  // that blocks the event loop for minutes on large ~/.claude/ dirs (700+ files).
-  const { importAllSessions, backfillCompactions } = require("../scripts/import-history");
-  const dbModule = require("./db");
-  const existingCount = dbModule.db.prepare("SELECT COUNT(*) AS c FROM sessions").get().c;
-  if (existingCount === 0) {
-    importAllSessions(dbModule)
-      .then(({ imported, skipped, errors }) => {
-        if (imported > 0) console.log(`Imported ${imported} legacy sessions from ~/.claude/`);
-        if (errors > 0) console.log(`${errors} session files had errors during import`);
-      })
-      .then(() => backfillCompactions(dbModule))
-      .then(({ backfilled }) => {
-        if (backfilled > 0)
-          console.log(`Backfilled ${backfilled} compaction events from ~/.claude/`);
-      })
-      .catch(() => {});
-  }
+  // The one-time legacy-session import runs from startBackgroundServices()
+  // (called above) so the embedded desktop server backfills history too — not
+  // just this standalone path. See autoImportLegacySessions().
 }
 
 module.exports = { createApp, startServer, startBackgroundServices };

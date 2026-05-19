@@ -205,7 +205,7 @@ The dashboard, landing page, and wiki each ship as independent Progressive Web A
 
 ### Desktop App Setup
 
-The `desktop/` workspace ships the dashboard as a native macOS `.app` (distributed as a `.dmg`) built with Electron 35. It is an Electron shell that **embeds the existing Express server in-process** — it does not reimplement anything. For installation (download a CI-built DMG or build one locally, mount, drag, Gatekeeper bypass), see [INSTALL.md → macOS Desktop App](./INSTALL.md#macos-desktop-app-optional). The full user guide is [`DESKTOP.md`](./DESKTOP.md); the contributor / architecture reference is [`desktop/README.md`](./desktop/README.md).
+The `desktop/` workspace ships the dashboard as a native macOS `.app` (distributed as a `.dmg`) built with Electron 35. It is an Electron shell that **embeds the existing Express server in-process** — it does not reimplement anything. For installation (download a pre-built DMG from the [latest GitHub Release](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest) or the per-commit `ClaudeCodeMonitor-dmg` CI artifact, or build one locally, then mount, drag, Gatekeeper bypass), see [INSTALL.md → macOS Desktop App](./INSTALL.md#macos-desktop-app-optional). The full user guide is [`DESKTOP.md`](./DESKTOP.md); the contributor / architecture reference is [`desktop/README.md`](./desktop/README.md).
 
 This section covers the parts of running the desktop app that matter for setup.
 
@@ -609,7 +609,7 @@ npm run desktop:dmg:arm64   # Apple Silicon
 npm run desktop:dmg:x64     # Intel
 ```
 
-CI already builds and uploads the universal DMG as the `ClaudeCodeMonitor-dmg` artifact, so you rarely need to build it locally.
+CI already produces the universal DMG — pulled either from the [latest GitHub Release](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest) (CI auto-publishes a `vX.Y.Z` when `package.json` is bumped on `master`) or from the per-commit `ClaudeCodeMonitor-dmg` workflow artifact — so you rarely need to build it locally.
 
 ---
 

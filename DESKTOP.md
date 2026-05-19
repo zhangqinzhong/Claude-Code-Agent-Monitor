@@ -21,14 +21,15 @@ The two coexist — install whichever fits your workflow.
 
 ## Quick install
 
-**Option A — download a pre-built DMG** (from the latest CI run or release):
+**Option A — download a pre-built DMG** (recommended):
 
-1. Download `ClaudeCodeMonitor-<version>-universal.dmg` from the GitHub release page, or from the `ClaudeCodeMonitor-dmg` artifact on the latest passing CI run:
+1. Open [**Releases → latest**](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest) and grab `ClaudeCodeMonitor-<version>-universal.dmg` from the assets. Every `master` commit that bumps the version in `package.json` cuts a new `vX.Y.Z` release automatically (CI publishes it), so this link always lands on the current build — no GitHub sign-in required.
+2. Want a **per-commit build** instead of waiting for a release? Every green CI run uploads a `ClaudeCodeMonitor-dmg` workflow artifact (sign-in required, 14-day retention):
    ```bash
    gh run download <run-id> -R hoangsonww/Claude-Code-Agent-Monitor -n ClaudeCodeMonitor-dmg
    ```
-2. Double-click → drag `Claude Code Monitor.app` into your `Applications` folder.
-3. Open it. macOS may show a Gatekeeper warning the first time — see [Gatekeeper](#gatekeeper-first-launch) below.
+3. Double-click the DMG → drag `Claude Code Monitor.app` into your `Applications` folder.
+4. Open it. macOS may show a Gatekeeper warning the first time — see [Gatekeeper](#gatekeeper-first-launch) below.
 
 **Option B — build locally:**
 
@@ -43,7 +44,9 @@ npm run desktop:dmg:arm64    # Apple Silicon only — FAST (~1 min); use this fo
 npm run desktop:dmg:x64      # Intel only — FAST
 npm run desktop:dmg          # universal (x64 + arm64) — SLOW; for distributing one DMG to everyone
 
-open desktop/release/ClaudeCodeMonitor-*.dmg
+# Open the DMG you just built. Each desktop:dmg* build wipes release/ first
+# and emits exactly one DMG, so match the suffix to the build above.
+open desktop/release/ClaudeCodeMonitor-*-arm64.dmg   # …-x64.dmg / …-universal.dmg for the others
 ```
 
 > **The universal `desktop:dmg` build is intentionally slow.** It builds the app
@@ -60,8 +63,9 @@ open desktop/release/ClaudeCodeMonitor-*.dmg
 1. The Electron main process picks a free port — preferring **4820**, falling back to 4821–4829, then a random high port if all those are taken.
 2. If something already answers `/api/health` on port 4820 (e.g. you ran `npm start` in a terminal), the app **adopts that server** and skips starting a second one. No double-binding, no SQLite contention.
 3. Otherwise it `require()`s `server/index.js` directly in-process — same Node runtime as the main process, same memory. Boot is typically under two seconds.
-4. The dashboard window opens (unless macOS launched the app at login, in which case it stays tray-only).
-5. A menu-bar icon appears with: *Open Dashboard, Open in Browser, Restart Server, Show Logs, Open at Login (toggle), Quit*.
+4. On startup the server records its **live port** to `~/.claude/.agent-dashboard.json`. The Claude Code hook handler reads that file, so events still reach the dashboard when the app bound a fallback port instead of 4820.
+5. The dashboard window opens (unless macOS launched the app at login, in which case it stays tray-only).
+6. A menu-bar icon appears with: *Open Dashboard, Open in Browser, Restart Server, Show Logs, Open at Login (toggle), Quit*.
 
 ## Lifecycle semantics
 
@@ -72,6 +76,7 @@ open desktop/release/ClaudeCodeMonitor-*.dmg
 - **Logs** live at `~/Library/Logs/Claude Code Monitor/desktop.log` (use *Show Logs* in the menu to open the folder).
 - **Your data** (the SQLite database and VAPID keys) lives in `~/Library/Application Support/Claude Code Monitor/data/` — outside the app bundle, so it **survives app reinstalls and updates**.
 - **The `claude` CLI** is resolved using your login-shell `PATH`, recovered at startup — so "Run Claude" works even though a Finder/Dock-launched app would otherwise only inherit a minimal `PATH`.
+- **Notifications** (including the in-dashboard *Send test notification* button) are delivered as **native macOS notifications** when running inside the `.app` — the embedded server calls Electron's `Notification` API directly. Web Push doesn't work reliably inside Electron (Chromium-in-Electron ships without Firebase Cloud Messaging credentials, so `pushManager.subscribe` returns endpoints nothing can deliver to), and this path bypasses it entirely. The web dashboard at `npm start` continues to use Web Push as before.
 
 ## File layout (for contributors)
 
@@ -100,7 +105,13 @@ desktop/
     └── smoke.test.mjs          # spawn-and-probe /api/health
 ```
 
-**The only change outside `desktop/` is a behavior-preserving refactor of `server/index.js`:** the post-listen bootstrap (update scheduler, Claude Code config watcher, orphaned-run reconciliation) was extracted into an exported `startBackgroundServices()` so the embedded server runs exactly what `node server/index.js` runs. The standalone server path is functionally unchanged. `client/`, `scripts/`, `mcp/`, and `vscode-extension/` are untouched. The Electron main process is otherwise just a host for the same code.
+**Changes outside `desktop/` are deliberately minimal:**
+
+- `server/index.js` — a behavior-preserving refactor: the post-listen bootstrap (one-time legacy-session import, update scheduler, Claude Code config watcher, orphaned-run reconciliation) was extracted into an exported `startBackgroundServices()` so the embedded server runs exactly what `node server/index.js` runs. The standalone server path is functionally unchanged. (The legacy-session import previously sat in the standalone-only `require.main` block, so the desktop dashboard started empty — moving it into `startBackgroundServices()` fixes that.) It also now publishes its live port via `server/lib/server-info.js` on startup.
+- `server/lib/server-info.js` *(new)* — writes/reads the `~/.claude/.agent-dashboard.json` port discovery file.
+- `scripts/hook-handler.js` — resolves the dashboard port from the discovery file (falling back to `CLAUDE_DASHBOARD_PORT`, then 4820), so hook events reach the server even when it bound a fallback port.
+
+`client/`, `mcp/`, and `vscode-extension/` are untouched. The Electron main process is otherwise just a host for the same code.
 
 ## Gatekeeper (first launch)
 
@@ -166,10 +177,12 @@ The smoke test does not exercise the BrowserWindow (no display on headless CI). 
 | Symptom | Cause | Fix |
 |---|---|---|
 | "Apple could not verify…" on first launch | Unnotarized DMG | `xattr -cr ~/Downloads/ClaudeCodeMonitor-*.dmg` |
+| macOS prompts to install Rosetta when opening the app | You installed the **x64** build on an Apple Silicon Mac | Check your arch with `uname -m` (`arm64` → Apple Silicon, build with `desktop:dmg:arm64`). Each `desktop:dmg*` build now wipes `release/` and emits a single DMG whose mounted-volume title states the architecture — e.g. *Claude Code Monitor (Apple Silicon)* — so there is no ambiguous second window to drag from. If stale DMGs from an older build linger, clear them with `rm -rf desktop/release` and rebuild |
 | Window shows but content is blank | Server didn't boot — check `~/Library/Logs/Claude Code Monitor/desktop.log` | Restart from tray → *Restart Server* |
 | Tray icon missing | The OS hides tray icons when the menu bar is full | Move other menu-bar items aside, or look in the overflow chevron |
 | App didn't auto-start at login | Login Items entry got revoked by macOS | Toggle *Open at Login* off and on again from the tray menu |
 | Port 4820 already in use, app refuses to start | Something other than the dashboard is on 4820 and it doesn't answer `/api/health` | The app will pick a fallback (4821–4829, then a random high port) — check the tray menu's port indicator |
+| Dashboard stays empty — 0 sessions, 0 agents, no real-time updates | The app bound a fallback port (4820 was taken), and the Claude Code hooks were posting events to the wrong port | Fixed — the server publishes its live port to `~/.claude/.agent-dashboard.json` and the hook handler reads it. After upgrading from a pre-fix build, **start a new Claude Code session** so the updated hooks take effect |
 | `desktop:dmg` seems stuck at `packaging arch=universal` | Not stuck — the universal merge is genuinely slow | Wait a few minutes, or build a single architecture with `desktop:dmg:arm64` / `desktop:dmg:x64` |
 | Build fails: `entry file out/main.js does not exist` | `electron-builder` was run without compiling TypeScript first | Build via `npm run desktop:dmg*` (chains the build); don't invoke `electron-builder` bare |
 | Signing fails with `Application … could not be found` | A code-signing certificate in your keychain was auto-discovered | Fixed — the `package` script sets `CSC_IDENTITY_AUTO_DISCOVERY=false`; build via `npm run desktop:dmg*` |

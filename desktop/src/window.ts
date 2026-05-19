@@ -60,7 +60,13 @@ export function createDashboardWindow(targetUrl: string): BrowserWindow {
     minHeight: 480,
     show: false,
     title: APP_NAME,
-    titleBarStyle: "hiddenInset",
+    // Use the standard macOS title bar rather than `hiddenInset`. With a hidden
+    // title bar the traffic-light buttons float directly over the React app's
+    // top edge and visually blend into the dashboard chrome; a native title bar
+    // gives them their own clearly-separated row, shows the app name, and
+    // restores the conventional double-click-to-maximize / drag-from-anywhere
+    // behaviour without needing custom drag regions in the renderer.
+    titleBarStyle: "default",
     backgroundColor: "#0b0f1a",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
