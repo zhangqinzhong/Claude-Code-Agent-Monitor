@@ -1,6 +1,6 @@
 {
   "name": "agent-dashboard-desktop",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "Native macOS desktop shell for Claude Code Agent Monitor.",
   "author": "Son Nguyen <hoangson091104@gmail.com>",
