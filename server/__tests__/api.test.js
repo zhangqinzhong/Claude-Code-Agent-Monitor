@@ -1696,17 +1696,7 @@ describe("Compaction agent ingestion", () => {
     // a fresh-ingestion row, then assert the API never reports a negative avg.
     const sid = `compact-avg-sess-${Date.now()}`;
     stmts.insertSession.run(sid, "compact-avg", "completed", "/tmp", "test-model", null);
-    stmts.insertAgent.run(
-      `${sid}-main`,
-      sid,
-      "main",
-      "main",
-      null,
-      "completed",
-      null,
-      null,
-      null
-    );
+    stmts.insertAgent.run(`${sid}-main`, sid, "main", "main", null, "completed", null, null, null);
 
     // Insert a compaction row with the broken invariant explicitly, then run
     // the same repair the startup migration runs and assert it is healed.
@@ -1724,9 +1714,7 @@ describe("Compaction agent ingestion", () => {
     );
     const pastTs = new Date(Date.now() - 30_000).toISOString();
     db.prepare("UPDATE agents SET ended_at = ? WHERE id = ?").run(pastTs, brokenId);
-    const before = db
-      .prepare("SELECT started_at, ended_at FROM agents WHERE id = ?")
-      .get(brokenId);
+    const before = db.prepare("SELECT started_at, ended_at FROM agents WHERE id = ?").get(brokenId);
     assert.ok(
       before.ended_at < before.started_at,
       "precondition: row should have ended_at < started_at"
@@ -1739,9 +1727,7 @@ describe("Compaction agent ingestion", () => {
          AND julianday(ended_at) < julianday(started_at)`
     ).run();
 
-    const after = db
-      .prepare("SELECT started_at, ended_at FROM agents WHERE id = ?")
-      .get(brokenId);
+    const after = db.prepare("SELECT started_at, ended_at FROM agents WHERE id = ?").get(brokenId);
     assert.equal(after.started_at, pastTs, "repair should collapse started_at to ended_at");
     assert.equal(after.ended_at, pastTs);
 

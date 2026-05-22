@@ -57,9 +57,7 @@ describe("StatCard", () => {
   });
 
   it("should render a skeleton placeholder when loading and hide the real value", () => {
-    const { container } = render(
-      <StatCard label="Total" value="" icon={Activity} loading />
-    );
+    const { container } = render(<StatCard label="Total" value="" icon={Activity} loading />);
     // value text should NOT appear so users never see a flash of "-" or 0
     expect(screen.queryByText("-")).not.toBeInTheDocument();
     expect(screen.queryByText("0")).not.toBeInTheDocument();
@@ -68,9 +66,7 @@ describe("StatCard", () => {
   });
 
   it("should swap from skeleton to value when loading flips false", () => {
-    const { rerender } = render(
-      <StatCard label="Total" value="" icon={Activity} loading />
-    );
+    const { rerender } = render(<StatCard label="Total" value="" icon={Activity} loading />);
     expect(screen.queryByText("42")).not.toBeInTheDocument();
     rerender(<StatCard label="Total" value={42} icon={Activity} loading={false} />);
     expect(screen.getByText("42")).toBeInTheDocument();

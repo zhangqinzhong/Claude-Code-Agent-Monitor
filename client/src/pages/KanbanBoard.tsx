@@ -274,13 +274,15 @@ export function KanbanBoard() {
                     ? Array.from({ length: 3 }).map((_, i) => (
                         <CardSkeleton key={`sk-${status}-${i}`} />
                       ))
-                    : items?.slice(0, limit).map((agent) => (
-                        <AgentCard
-                          key={agent.id}
-                          agent={agent}
-                          session={sessionsById.get(agent.session_id)}
-                        />
-                      ))}
+                    : items
+                        ?.slice(0, limit)
+                        .map((agent) => (
+                          <AgentCard
+                            key={agent.id}
+                            agent={agent}
+                            session={sessionsById.get(agent.session_id)}
+                          />
+                        ))}
                 </Column>
               );
             })
@@ -310,9 +312,9 @@ export function KanbanBoard() {
                     ? Array.from({ length: 3 }).map((_, i) => (
                         <CardSkeleton key={`sk-${status}-${i}`} />
                       ))
-                    : items?.slice(0, limit).map((session) => (
-                        <SessionCard key={session.id} session={session} />
-                      ))}
+                    : items
+                        ?.slice(0, limit)
+                        .map((session) => <SessionCard key={session.id} session={session} />)}
                 </Column>
               );
             })}

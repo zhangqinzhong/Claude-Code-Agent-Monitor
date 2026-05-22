@@ -30,7 +30,12 @@ const ROUNDED_CLASS = {
  * Base shimmer block. Compose with width/height utilities for any shape:
  *   <Skeleton className="h-6 w-24" />
  */
-export function Skeleton({ className = "", style, rounded = "md", label = "Loading" }: SkeletonProps) {
+export function Skeleton({
+  className = "",
+  style,
+  rounded = "md",
+  label = "Loading",
+}: SkeletonProps) {
   return (
     <span
       role="status"

@@ -529,7 +529,9 @@ function StatPill({
       {loading ? (
         <StatValueSkeleton />
       ) : (
-        <p className={`text-2xl font-bold ${color}`}>{raw ? <Tip raw={raw}>{value}</Tip> : value}</p>
+        <p className={`text-2xl font-bold ${color}`}>
+          {raw ? <Tip raw={raw}>{value}</Tip> : value}
+        </p>
       )}
       {loading ? (
         <TextSkeleton width="w-20" />
