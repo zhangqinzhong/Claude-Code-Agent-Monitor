@@ -405,11 +405,16 @@ class TranscriptCache {
       return null;
     }
 
+    this._trimArray(state.errors);
+    this._trimArray(state.turnDurations);
+    if (state.compaction) this._trimArray(state.compaction.entries);
+
+    // For usageExtras (Sets), bound by converting to array, trimming, back to Set
     const serializedExtras = hasUsageExtras
       ? {
-          service_tiers: [...state.usageExtras.service_tiers],
-          speeds: [...state.usageExtras.speeds],
-          inference_geos: [...state.usageExtras.inference_geos],
+          service_tiers: this._capArrayFromSet(state.usageExtras.service_tiers),
+          speeds: this._capArrayFromSet(state.usageExtras.speeds),
+          inference_geos: this._capArrayFromSet(state.usageExtras.inference_geos),
         }
       : null;
 
@@ -466,18 +471,21 @@ class TranscriptCache {
       if (!compaction) compaction = { count: 0, entries: [] };
       compaction.count += incremental.compaction.count;
       compaction.entries.push(...incremental.compaction.entries);
+      this._trimArray(compaction.entries);
     }
 
     let errors = cached.errors ? [...cached.errors] : null;
     if (incremental && incremental.errors) {
       if (!errors) errors = [];
       errors.push(...incremental.errors);
+      this._trimArray(errors);
     }
 
     let turnDurations = cached.turnDurations ? [...cached.turnDurations] : null;
     if (incremental && incremental.turnDurations) {
       if (!turnDurations) turnDurations = [];
       turnDurations.push(...incremental.turnDurations);
+      this._trimArray(turnDurations);
     }
 
     const thinkingBlockCount =
@@ -501,9 +509,9 @@ class TranscriptCache {
         ]),
       };
       usageExtras = {
-        service_tiers: [...merged.service_tiers],
-        speeds: [...merged.speeds],
-        inference_geos: [...merged.inference_geos],
+        service_tiers: this._capArrayFromSet(merged.service_tiers),
+        speeds: this._capArrayFromSet(merged.speeds),
+        inference_geos: this._capArrayFromSet(merged.inference_geos),
       };
     }
 
@@ -562,6 +570,13 @@ class TranscriptCache {
   _trimArray(arr, maxLen = MAX_ARRAY_LEN) {
     if (!arr || !Array.isArray(arr) || arr.length <= maxLen) return;
     arr.splice(0, arr.length - maxLen);
+  }
+
+  /** Convert Set to array with the same MAX_ARRAY_LEN tail cap. */
+  _capArrayFromSet(set) {
+    const arr = [...set];
+    this._trimArray(arr);
+    return arr;
   }
 
   /** Number of entries currently cached */
