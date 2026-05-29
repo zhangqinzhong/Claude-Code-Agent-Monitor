@@ -4,6 +4,12 @@
   "exportData": "Xuất dữ liệu",
   "acrossSessions": "Trên toàn bộ phiên đang được theo dõi",
   "basedOnUsage": "Dựa trên mức dùng token theo mô hình",
+  "tabby": {
+    "title": "Bạn đồng hành Tabby",
+    "description": "Chú mèo nổi phản ứng với các phiên trực tiếp của bạn.",
+    "enable": "Hiện Tabby",
+    "enableDesc": "Hiển thị bạn đồng hành ở góc trên toàn bảng điều khiển (⌘B để mở)"
+  },
   "pricing": {
     "title": "Định giá mô hình",
     "description": "Đơn giá theo một triệu token (USD). Dùng % làm ký tự đại diện trong mẫu.",

@@ -1,0 +1,92 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, fireEvent, act, cleanup, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { Tabby } from "../Tabby";
+import { eventBus } from "../../../lib/eventBus";
+import type { WSMessage, Session } from "../../../lib/types";
+
+function renderTabby() {
+  return render(
+    <MemoryRouter>
+      <Tabby />
+    </MemoryRouter>
+  );
+}
+
+const sessionMsg = (id: string, status: Session["status"]): WSMessage => ({
+  type: "session_updated",
+  data: { id, status } as Session,
+  timestamp: "t",
+});
+
+beforeEach(() => {
+  localStorage.clear();
+  eventBus.setConnected(true);
+  // Freeze timers so the brain's 1s heartbeat tick can't fire a state update
+  // outside act() mid-assertion. We never advance them in these tests.
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+describe("Tabby widget", () => {
+  it("renders the avatar button by default", () => {
+    renderTabby();
+    expect(screen.getByRole("button", { name: /open tabby companion/i })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /tabby/i })).toBeInTheDocument();
+  });
+
+  it("opens the panel on click and answers a local status question", () => {
+    renderTabby();
+    fireEvent.click(screen.getByRole("button", { name: /open tabby companion/i }));
+    const panel = screen.getByRole("dialog", { name: /tabby companion/i });
+    expect(panel).toBeInTheDocument();
+
+    const input = within(panel).getByLabelText(/ask tabby/i);
+    fireEvent.change(input, { target: { value: "status" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(within(panel).getByText(/live ·/i)).toBeInTheDocument();
+  });
+
+  it("toggles open/closed with Cmd/Ctrl+B and closes with Esc", () => {
+    renderTabby();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    act(() => {
+      fireEvent.keyDown(window, { key: "b", metaKey: true });
+    });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    act(() => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows an error badge when a session errors", () => {
+    renderTabby();
+    act(() => {
+      eventBus.publish(sessionMsg("a", "error"));
+    });
+    const btn = screen.getByRole("button", { name: /open tabby companion/i });
+    expect(within(btn).getByText("1")).toBeInTheDocument();
+  });
+
+  it("reflects the live count in the panel status", () => {
+    renderTabby();
+    act(() => {
+      eventBus.publish(sessionMsg("a", "active"));
+      eventBus.publish(sessionMsg("b", "active"));
+    });
+    fireEvent.click(screen.getByRole("button", { name: /open tabby companion/i }));
+    const panel = screen.getByRole("dialog", { name: /tabby companion/i });
+    expect(within(panel).getByText(/2 live/i)).toBeInTheDocument();
+  });
+
+  it("respects the enabled preference", () => {
+    localStorage.setItem("agent-dashboard-tabby-enabled", "false");
+    renderTabby();
+    expect(screen.queryByRole("button", { name: /open tabby companion/i })).not.toBeInTheDocument();
+  });
+});

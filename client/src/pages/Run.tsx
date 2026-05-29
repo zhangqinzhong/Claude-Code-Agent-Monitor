@@ -922,6 +922,21 @@ export function Run() {
       });
   }, [searchParams, setSearchParams, handle, attachToRun, t]);
 
+  // Prefill the prompt box from `?prompt=<text>` (e.g. Tabby's Ask handoff).
+  // Apply once, then strip the param so a later refresh doesn't overwrite edits
+  // the user has since made to the prompt.
+  const promptPrefilledRef = useRef(false);
+  useEffect(() => {
+    if (promptPrefilledRef.current) return;
+    const p = searchParams.get("prompt");
+    if (!p) return;
+    promptPrefilledRef.current = true;
+    setPrompt(p);
+    const next = new URLSearchParams(searchParams);
+    next.delete("prompt");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const send = useCallback(async () => {
     if (!handle || !followUp.trim() || busy) return;
     setBusy("send");
