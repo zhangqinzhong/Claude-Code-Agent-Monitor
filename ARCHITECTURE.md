@@ -85,6 +85,7 @@ Architectural overview and technical reference for the Agent Dashboard system, c
 - [State Management](#state-management)
 - [Browser Notification System](#browser-notification-system)
 - [Update Notifier Subsystem](#update-notifier-subsystem)
+- [Tabby Companion Subsystem](#tabby-companion-subsystem)
 - [VS Code Extension Architecture](#vs-code-extension-architecture)
 - [Desktop App Architecture (macOS / Electron)](#desktop-app-architecture-macos--electron)
 - [Security Considerations](#security-considerations)
@@ -532,6 +533,7 @@ graph TD
         STC[StatCard]
         STB[StatusBadge]
         ES[EmptyState]
+        TB["Tabby/<br/>(floating cat companion)"]
     end
 
     D --> STC & AGC & STB
@@ -541,6 +543,8 @@ graph TD
     AF --> STB & ES
     APP --> L
     L --> SB
+    L --> TB
+    EB --> TB
 
     style TYPES fill:#3178C6,stroke:#5a9fd4,color:#fff
     style EB fill:#f59e0b,stroke:#fbbf24,color:#000
@@ -854,10 +858,13 @@ graph TD
     BC --> WS
     WS --> EB
     EB --> SUB1 & SUB2 & SUB3 & SUB4 & SUB5 & SUB6
+    EB --> SUB7["Tabby companion subscriber"]
 
     style BC fill:#10b981,stroke:#34d399,color:#fff
     style EB fill:#f59e0b,stroke:#fbbf24,color:#000
 ```
+
+The **Tabby companion** (see [Tabby Companion Subsystem](#tabby-companion-subsystem)) is an additional read-only `eventBus` subscriber. It consumes the existing message envelope above and introduces **no new WebSocket message types** and no protocol changes.
 
 ### Client Reconnection
 
@@ -1448,6 +1455,7 @@ graph TD
 
     subgraph "App-Level Hooks"
         NOTIF_H["useNotifications<br/>reads prefs, fires<br/>browser notifications"]
+        TABBY_H["useTabbyBrain<br/>derives cat mood +<br/>speech from WS stream"]
     end
 
     subgraph "Page State"
@@ -1465,7 +1473,9 @@ graph TD
     WSM --> EB
     EB --> US1 & US2 & US3 & US4 & US5 & US6 & US8 & US7
     EB --> NOTIF_H
+    EB --> TABBY_H
     LS --> NOTIF_H
+    LS --> TABBY_H
     LS --> US7
 ```
 
@@ -1735,6 +1745,98 @@ The dashboard does not expose an apply/restart endpoint by design. A process can
 - **Branch coverage.** Even with the situation-aware `manual_command` produced by the detection layer, an automatic apply would still need branch-aware integration (rebase vs merge vs switch) and merge-conflict handling. That belongs in the user's shell, not in a background daemon.
 
 The detection layer carries all of the signal value: the dashboard tells the user *when* to update and *exactly what to run*; the user owns the *how* in their own shell.
+
+---
+
+## Tabby Companion Subsystem
+
+Tabby is a **client-only** floating cat companion that reacts to live session activity. It is purely additive UI: there is **no server/backend code**, **no new API routes**, **no new WebSocket message types**, and **no database changes**. Tabby reuses the existing real-time event stream (the same `eventBus` every page already consumes) and the existing **Run** page for its "ask a real question" path. The entire subsystem lives under `client/src/components/Tabby/`.
+
+The design follows a strict **pure-core / hook / presentational** split: a framework-free brain (a `WSMessage` reducer plus a mood state machine with an injected clock and zero side effects) is fully unit-tested in isolation, a single React hook is the only consumer of the global `eventBus` and the only owner of timers and side effects, and the SVG/markup components are pure presentational views driven by props.
+
+### Module Layout
+
+```mermaid
+graph TD
+    subgraph "Pure Core (framework-free, unit-tested)"
+        BRAIN["brain.ts<br/>reduceTabby reducer +<br/>deriveMood state machine<br/>(injected clock, no side effects)"]
+        INTENTS["intents.ts<br/>local Q&A over cached status;<br/>unmatched → Run handoff"]
+        QUIPS["quips.ts<br/>mood → phrase pools"]
+        PREFS["prefs.ts<br/>localStorage enabled/muted<br/>(cross-tab sync)"]
+    end
+
+    subgraph "Hook (only eventBus consumer)"
+        HOOK["useTabbyBrain.ts<br/>wires brain to real timers<br/>(idle/sleep/stuck), speech-bubble<br/>queue, mute, clear-alerts"]
+    end
+
+    subgraph "Presentational (pure)"
+        SHELL["Tabby.tsx<br/>shell: open/closed state,<br/>⌘B / Esc, reduced-motion,<br/>navigation"]
+        AVATAR["CatAvatar.tsx<br/>SVG cat; data-mood drives CSS;<br/>cursor-tracking pupils"]
+        BUBBLE["SpeechBubble.tsx<br/>bubble"]
+        PANEL["TabbyPanel.tsx<br/>status + quick actions + Ask box"]
+        CSS["tabby.css<br/>keyframes + per-mood expressions"]
+    end
+
+    BUS["lib/eventBus.ts<br/>(existing WS stream)"]
+
+    BUS --> HOOK
+    HOOK --> BRAIN
+    HOOK --> QUIPS
+    HOOK --> PREFS
+    SHELL --> HOOK
+    SHELL --> INTENTS
+    SHELL --> AVATAR & BUBBLE & PANEL
+    AVATAR --> CSS
+
+    style BRAIN fill:#10b981,stroke:#34d399,color:#fff
+    style BUS fill:#f59e0b,stroke:#fbbf24,color:#000
+    style HOOK fill:#6366f1,stroke:#818cf8,color:#fff
+```
+
+### Data Flow
+
+```mermaid
+flowchart LR
+    WSS["Server WebSocket<br/>broadcast"] --> UWS["useWebSocket"]
+    UWS --> PUB["eventBus.publish"]
+    PUB --> SUB["useTabbyBrain<br/>(subscriber)"]
+    SUB --> DERIVED["derived state<br/>{ mood, status, bubble }"]
+    DERIVED --> AVATAR["CatAvatar"]
+    DERIVED --> BUBBLE["SpeechBubble"]
+    DERIVED --> PANEL["TabbyPanel"]
+    PANEL -->|"unmatched Ask"| RUN["/run?prompt=…<br/>(existing Run page)"]
+
+    style PUB fill:#f59e0b,stroke:#fbbf24,color:#000
+    style RUN fill:#10b981,stroke:#34d399,color:#fff
+```
+
+The mood state machine in `deriveMood` resolves to a single expression using a fixed priority order: `disconnected > worried > stuck > happy > thinking > watching > sleeping > idle`. The resolved mood is written to a `data-mood` attribute on the SVG cat, and `tabby.css` maps each mood to its keyframe animation and expression.
+
+### Component Responsibilities
+
+| Component | Responsibility |
+| --- | --- |
+| **`brain.ts`** | Pure, framework-free core. Exposes a `WSMessage` reducer (`reduceTabby`) and a mood state machine (`deriveMood`) with the priority order `disconnected > worried > stuck > happy > thinking > watching > sleeping > idle`. The clock is injected and there are zero side effects, so the brain is fully unit-tested in isolation. |
+| **`useTabbyBrain.ts`** | The **only** consumer of the global `eventBus`. Wires the pure brain to real timers (idle / sleep / stuck), the speech-bubble queue, mute, and clear-alerts. Produces the derived `{ mood, status, bubble }` the presentational components render. |
+| **`CatAvatar.tsx`** | Pure presentational SVG cat. The `data-mood` attribute drives CSS; pupils track the cursor. |
+| **`SpeechBubble.tsx`** | Pure presentational speech bubble. |
+| **`TabbyPanel.tsx`** | Pure presentational panel: status readout + quick actions + the Ask box. |
+| **`Tabby.tsx`** | Shell component. Mounted once in `client/src/components/Layout.tsx` as a sibling of `UpdateNotifier`. Owns open/closed state, the `⌘B` / `Esc` shortcuts, reduced-motion detection, and navigation. |
+| **`intents.ts`** | Pure local Q&A over the cached status snapshot. Queries that don't match a local intent become a handoff to the existing Run page via `/run?prompt=…`. |
+| **`quips.ts`** | Pure mood → phrase pools. |
+| **`prefs.ts`** | `localStorage`-backed enabled / muted preferences with cross-tab sync. |
+| **`tabby.css`** | Keyframes and per-mood expressions; selected via the `data-mood` attribute. |
+
+### Touchpoints Outside the Folder
+
+Tabby's only contact with the rest of the app is four light, additive touchpoints — nothing in the server, database, or WebSocket protocol changes:
+
+| File | Touchpoint |
+| --- | --- |
+| `client/src/components/Layout.tsx` | Mounts `<Tabby />` once, as a sibling of `<UpdateNotifier />`. |
+| `client/src/pages/Settings.tsx` | On/off toggle wired to `tabbyPrefs` (`localStorage`). |
+| `client/src/pages/Run.tsx` | Reads `?prompt=` to prefill the prompt box for Tabby's Ask handoff. |
+| `client/src/i18n/locales/{en,zh,vi}/settings.json` | `tabby.*` strings for the Settings toggle (en / zh / vi). |
 
 ---
 

@@ -585,6 +585,7 @@
           <a href="#settings-page" class="nav-link"><span class="nav-icon">◈</span>Settings Page</a>
           <a href="#update-notifier" class="nav-link"><span class="nav-icon">◈</span>Update Notifier</a>
           <a href="#connection-status" class="nav-link"><span class="nav-icon">◈</span>Connection Status</a>
+          <a href="#tabby" class="nav-link"><span class="nav-icon">🐾</span>Tabby</a>
 
           <div class="nav-section">Ops & Reference</div>
           <a href="#deployment" class="nav-link"><span class="nav-icon">◈</span>Deployment Modes</a>
@@ -4676,6 +4677,139 @@ xattr -cr "/Applications/Claude Code Monitor.app"</code></pre>
             portalled to <code>document.body</code> so the sidebar's stacking context can't trap
             it.
           </p>
+        </section>
+
+        <!-- ─── Tabby ──────────────────────────────────────────────────────── -->
+        <section id="tabby">
+          <div class="section-label">◈ Components &amp; UI</div>
+          <h2>🐾 Tabby — Reactive Cat Companion</h2>
+
+          <p>
+            <strong>Tabby</strong> is a cute SVG cat companion pinned to the
+            <strong>bottom-right corner on every page</strong> of the dashboard. It is always
+            present and turns the live session stream into glanceable, ambient feedback — calm when
+            idle, alert when something needs attention, and celebratory when a run finishes. Tabby
+            is built entirely on the existing <code>eventBus</code> WebSocket stream:
+            <strong>no new backend, no API key, and no new dependencies</strong>. The component
+            lives in <code>client/src/components/Tabby/</code> and can be toggled on or off in
+            <a href="#settings-page">Settings</a>.
+          </p>
+
+          <h3>Reactive Mascot — Eight Moods</h3>
+          <p>
+            Tabby derives one of eight moods from the live session WebSocket stream, each with its
+            own animation. The eyes track your cursor, and the active mood drives a distinct motion
+            cue.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mood</th>
+                  <th>When it appears</th>
+                  <th>Animation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Idle</td>
+                  <td>Nothing notable happening</td>
+                  <td>Gentle tail flick</td>
+                </tr>
+                <tr>
+                  <td>Watching</td>
+                  <td>Sessions active, observing the stream</td>
+                  <td>Ear perk, cursor-tracking eyes</td>
+                </tr>
+                <tr>
+                  <td>Happy</td>
+                  <td>A run completed successfully</td>
+                  <td>Sparkle</td>
+                </tr>
+                <tr>
+                  <td>Worried</td>
+                  <td>Something looks off</td>
+                  <td>Head bob</td>
+                </tr>
+                <tr>
+                  <td>Stuck</td>
+                  <td>A session appears blocked</td>
+                  <td>Shake + alert <code>!</code></td>
+                </tr>
+                <tr>
+                  <td>Thinking</td>
+                  <td>Work in progress</td>
+                  <td>Head bob</td>
+                </tr>
+                <tr>
+                  <td>Sleeping</td>
+                  <td>Quiet for a while</td>
+                  <td>Zzz</td>
+                </tr>
+                <tr>
+                  <td>Disconnected</td>
+                  <td>WebSocket offline</td>
+                  <td>Calm, dimmed state</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Auto-Surface Speech Bubbles</h3>
+          <p>
+            Notable events — session started or finished, errors, and run completed — automatically
+            surface a speech bubble. Bubbles are <strong>throttled and coalesced</strong> so bursts
+            of events never spam you, and they can be muted on demand. Everything reflects in real
+            time over the existing <code>eventBus</code> WebSocket channel, with no polling and no
+            extra services.
+          </p>
+
+          <h3>The ⌘B Panel</h3>
+          <p>
+            Click the cat — or press <code>⌘B</code> / <code>Ctrl+B</code> — to open Tabby's panel
+            (<code>Esc</code> closes it). The panel groups a live status line, quick actions, and an
+            Ask box.
+          </p>
+          <ul>
+            <li>
+              <strong>Live status line:</strong> <em>N live · M errored · connection state</em>,
+              updated from cached data.
+            </li>
+            <li>
+              <strong>Quick actions:</strong> jump to
+              <a href="#features">Run Claude</a>, Activity, Sessions, or errored sessions; mute
+              bubbles; clear alerts.
+            </li>
+            <li>
+              <strong>Ask box:</strong> answers simple status questions locally from cached data
+              (&ldquo;what's running&rdquo;, &ldquo;any errors&rdquo;, &ldquo;status&rdquo;).
+            </li>
+          </ul>
+
+          <h3>Ask → Run Claude Handoff</h3>
+          <p>
+            The Ask box answers status questions instantly and offline from cached data. For
+            anything beyond a simple status question, Tabby hands off to the existing
+            <strong>Run Claude</strong> page (<code>/run?prompt=...</code>) to spawn a real Claude
+            Code session — so there is never a separate model call, key, or service to manage.
+          </p>
+
+          <h3>Accessibility &amp; Resilience</h3>
+          <ul>
+            <li>
+              Fully keyboard operable: <code>⌘B</code> / <code>Ctrl+B</code> to open,
+              <code>Esc</code> to close.
+            </li>
+            <li>
+              Status and bubbles announce via <code>aria-live</code> for screen readers.
+            </li>
+            <li>
+              Respects <code>prefers-reduced-motion</code> to calm animations.
+            </li>
+            <li>
+              Degrades gracefully to a calm, dimmed disconnected state when offline.
+            </li>
+          </ul>
         </section>
 
         <!-- ─── Deployment ─────────────────────────────────────────────────── -->
