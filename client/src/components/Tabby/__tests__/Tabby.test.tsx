@@ -95,7 +95,7 @@ describe("Tabby widget", () => {
     const btn = screen.getByRole("button", { name: /open tabby companion/i });
     act(() => {
       fireEvent.pointerDown(btn, { clientX: 990, clientY: 700, button: 0 });
-      fireEvent.pointerUp(window, { clientX: 990, clientY: 700 });
+      fireEvent.pointerUp(btn, { clientX: 990, clientY: 700 });
     });
     fireEvent.click(btn);
     expect(screen.getByRole("dialog", { name: /tabby companion/i })).toBeInTheDocument();
@@ -107,8 +107,8 @@ describe("Tabby widget", () => {
     // Default dock is bottom-right. Drag far to the left past the threshold.
     act(() => {
       fireEvent.pointerDown(btn, { clientX: 990, clientY: 700, button: 0 });
-      fireEvent.pointerMove(window, { clientX: 80, clientY: 300 });
-      fireEvent.pointerUp(window, { clientX: 80, clientY: 300 });
+      fireEvent.pointerMove(btn, { clientX: 80, clientY: 300 });
+      fireEvent.pointerUp(btn, { clientX: 80, clientY: 300 });
     });
     // The synthetic click that follows a drag must be swallowed.
     fireEvent.click(btn);
@@ -118,11 +118,25 @@ describe("Tabby widget", () => {
     expect(typeof saved.y).toBe("number");
   });
 
+  it("a sub-threshold pointer move is treated as a tap, not a drag", () => {
+    renderTabby();
+    const btn = screen.getByRole("button", { name: /open tabby companion/i });
+    act(() => {
+      fireEvent.pointerDown(btn, { clientX: 990, clientY: 700, button: 0 });
+      fireEvent.pointerMove(btn, { clientX: 992, clientY: 701 }); // < 5px threshold
+      fireEvent.pointerUp(btn, { clientX: 992, clientY: 701 });
+    });
+    fireEvent.click(btn);
+    expect(screen.getByRole("dialog", { name: /tabby companion/i })).toBeInTheDocument();
+    // No position was persisted because no real drag happened.
+    expect(localStorage.getItem("agent-dashboard-tabby-pos")).toBeNull();
+  });
+
   it("restores a persisted left-edge position on mount", () => {
     localStorage.setItem("agent-dashboard-tabby-pos", JSON.stringify({ side: "left", y: 0.2 }));
     renderTabby();
-    const root = document.querySelector(".tabby-root") as HTMLElement;
-    expect(root).toBeTruthy();
-    expect(root.getAttribute("data-side")).toBe("left");
+    const btn = screen.getByRole("button", { name: /open tabby companion/i }) as HTMLElement;
+    // Left-docked → inline left equals the edge margin (16px).
+    expect(btn.style.left).toBe("16px");
   });
 });

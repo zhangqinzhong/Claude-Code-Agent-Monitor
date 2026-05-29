@@ -315,30 +315,48 @@
 }
 
 /* ════════ shell (avatar button, bubble, panel) ════════ */
-.tabby-root {
-  position: fixed;
-  right: 1.25rem;
-  bottom: 1.25rem;
-  z-index: 40; /* above content, below modals (z-50 toasts) */
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.5rem;
-  pointer-events: none; /* children re-enable; lets clicks pass through gaps */
-}
-.tabby-root > * {
-  pointer-events: auto;
-}
+
+/* The draggable avatar. Fixed-positioned; left/top are set inline by the drag
+   hook. It docks to an edge (AssistiveTouch-style) and remembers where. */
 .tabby-avatar-btn {
+  position: fixed;
+  z-index: 41; /* above the flyout */
   background: transparent;
   border: none;
   padding: 0;
   line-height: 0;
   border-radius: 9999px;
-  transition: transform 0.15s ease;
+  cursor: grab;
+  touch-action: none; /* pointer drives the drag instead of scrolling on touch */
+  /* Glide to the snapped edge after a drag; killed mid-drag for 1:1 tracking. */
+  transition:
+    left 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    top 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.15s ease;
 }
 .tabby-avatar-btn:hover {
-  transform: translateY(-2px) scale(1.05);
+  transform: scale(1.06);
+}
+.tabby-avatar-btn:focus-visible {
+  outline: 2px solid #818cf8;
+  outline-offset: 3px;
+}
+.tabby-avatar-btn[data-dragging="1"] {
+  cursor: grabbing;
+  transition: transform 0.15s ease; /* no left/top easing while dragging */
+}
+.tabby-avatar-btn[data-dragging="1"]:hover {
+  transform: scale(1.1);
+}
+
+/* Self-clamping flyout that holds the bubble / panel next to the avatar. Its
+   left/top are computed and set inline by TabbyFlyout so it never crops. */
+.tabby-flyout {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 .tabby-avatar-btn:focus-visible {
   outline: 2px solid #818cf8;

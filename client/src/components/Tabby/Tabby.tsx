@@ -4,23 +4,44 @@
  *   in Layout) so it persists across routes and shares the single WebSocket.
  *   Owns the open/closed panel state, the ⌘B / Esc shortcuts, reduced-motion
  *   detection, and route navigation. Reactive personality + status/Ask come
- *   from useTabbyBrain; rendering is delegated to CatAvatar/SpeechBubble/Panel.
+ *   from useTabbyBrain; the avatar is draggable (AssistiveTouch-style) via
+ *   useTabbyPosition, and the bubble/panel render in a self-clamping flyout so
+ *   they never spill off any screen edge regardless of where the cat is docked.
  *
  *   The "do the job" path reuses the existing Run page: unmatched Ask queries
- *   deep-link to /run?prompt=… — no new LLM backend.
+ *   deep-link to /run?prompt=…&autostart=1 — no new LLM backend.
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { CatAvatar } from "./CatAvatar";
 import { SpeechBubble } from "./SpeechBubble";
 import { TabbyPanel } from "./TabbyPanel";
 import { useTabbyBrain } from "./useTabbyBrain";
-import { useTabbyPosition } from "./useTabbyPosition";
+import { useTabbyPosition, TABBY_SIZE } from "./useTabbyPosition";
 import { matchIntent } from "./intents";
 import { tabbyPrefs } from "./prefs";
 import "./tabby.css";
+
+const FLYOUT_GAP = 10; // px between avatar and flyout
+const VIEWPORT_MARGIN = 12; // min gap from any screen edge
+
+interface Anchor {
+  left: number;
+  top: number;
+  size: number;
+  side: "left" | "right";
+  openUp: boolean;
+}
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -36,6 +57,55 @@ function usePrefersReducedMotion(): boolean {
     return () => mq.removeEventListener?.("change", onChange);
   }, []);
   return reduced;
+}
+
+/**
+ * Fixed-position wrapper that places its content next to the avatar and clamps
+ * it inside the viewport. It measures itself (and re-measures on content/size
+ * changes via ResizeObserver) so a tall panel near a screen edge slides fully
+ * into view instead of being cropped.
+ */
+function TabbyFlyout({ anchor, children }: { anchor: Anchor; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<CSSProperties>({ visibility: "hidden" });
+
+  const place = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    // Horizontal: hug the avatar's docked edge, then clamp on-screen.
+    let left = anchor.side === "left" ? anchor.left : anchor.left + anchor.size - w;
+    left = Math.min(vw - w - VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, left));
+
+    // Vertical: open up when docked low, down when docked high; clamp on-screen.
+    let top = anchor.openUp ? anchor.top - h - FLYOUT_GAP : anchor.top + anchor.size + FLYOUT_GAP;
+    top = Math.min(vh - h - VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, top));
+
+    setStyle({ left, top, visibility: "visible" });
+  }, [anchor.left, anchor.top, anchor.size, anchor.side, anchor.openUp]);
+
+  useLayoutEffect(() => {
+    place();
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => place());
+    ro.observe(el);
+    window.addEventListener("resize", place);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [place]);
+
+  return (
+    <div ref={ref} className="tabby-flyout" style={style}>
+      {children}
+    </div>
+  );
 }
 
 export function Tabby() {
@@ -87,39 +157,44 @@ export function Tabby() {
 
   if (!enabled) return null;
 
+  const anchor: Anchor = {
+    left: place.left,
+    top: place.top,
+    size: place.size,
+    side: place.side,
+    openUp: place.openUp,
+  };
+
   return (
-    <div
-      className="tabby-root"
-      data-dragging={place.dragging ? "1" : "0"}
-      data-side={place.side}
-      style={{
-        left: place.left,
-        top: place.top,
-        // Avatar sits at the docked corner; bubble/panel stack toward screen
-        // center — upward when docked low, downward when docked high.
-        flexDirection: place.openUp ? "column" : "column-reverse",
-        alignItems: place.side === "left" ? "flex-start" : "flex-end",
-      }}
-    >
-      {!open && brain.bubble && (
-        <SpeechBubble text={brain.bubble} onDismiss={brain.dismissBubble} />
+    <>
+      {/* Flyouts are hidden while dragging so they don't chase the cat. */}
+      {!place.dragging && open && (
+        <TabbyFlyout anchor={anchor}>
+          <TabbyPanel
+            status={brain.status}
+            muted={brain.muted}
+            onToggleMute={brain.toggleMute}
+            onClearAlerts={brain.clearAlerts}
+            onNavigate={onNavigate}
+            onAsk={onAsk}
+            onClose={() => setOpen(false)}
+          />
+        </TabbyFlyout>
       )}
 
-      {open && (
-        <TabbyPanel
-          status={brain.status}
-          muted={brain.muted}
-          onToggleMute={brain.toggleMute}
-          onClearAlerts={brain.clearAlerts}
-          onNavigate={onNavigate}
-          onAsk={onAsk}
-          onClose={() => setOpen(false)}
-        />
+      {!place.dragging && !open && brain.bubble && (
+        <TabbyFlyout anchor={anchor}>
+          <SpeechBubble text={brain.bubble} onDismiss={brain.dismissBubble} />
+        </TabbyFlyout>
       )}
 
       <button
-        className="tabby-avatar-btn relative"
+        className="tabby-avatar-btn"
+        data-dragging={place.dragging ? "1" : "0"}
+        style={{ left: place.left, top: place.top, width: TABBY_SIZE, height: TABBY_SIZE }}
         onPointerDown={place.onPointerDown}
+        onPointerMove={place.onPointerMove}
+        onPointerUp={place.onPointerUp}
         onClick={() => {
           // A drag just ended — swallow the synthetic click so the panel
           // doesn't toggle when the user only repositioned the avatar.
@@ -137,6 +212,6 @@ export function Tabby() {
           </span>
         )}
       </button>
-    </div>
+    </>
   );
 }
