@@ -13,7 +13,12 @@ export type QuipKey = NonNullable<TabbyPulse> | Mood;
 const QUIPS: Record<QuipKey, string[]> = {
   // Pulses (event-driven, transient bubbles)
   session_done: ["session wrapped 🐾", "nice, that one's done", "clean run — purr"],
-  session_start: ["ooh, a new session", "something's cooking", "eyes on it 👀", "a new one just landed"],
+  session_start: [
+    "ooh, a new session",
+    "something's cooking",
+    "eyes on it 👀",
+    "a new one just landed",
+  ],
   subagent_spawn: [
     "a subagent just spawned 🐾",
     "reinforcements! new subagent",
