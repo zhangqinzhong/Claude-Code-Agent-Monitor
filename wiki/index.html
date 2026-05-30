@@ -585,6 +585,7 @@
           <a href="#settings-page" class="nav-link"><span class="nav-icon">◈</span>Settings Page</a>
           <a href="#update-notifier" class="nav-link"><span class="nav-icon">◈</span>Update Notifier</a>
           <a href="#connection-status" class="nav-link"><span class="nav-icon">◈</span>Connection Status</a>
+          <a href="#tabby" class="nav-link"><span class="nav-icon">🐾</span>Tabby</a>
 
           <div class="nav-section">Ops & Reference</div>
           <a href="#deployment" class="nav-link"><span class="nav-icon">◈</span>Deployment Modes</a>
@@ -2800,7 +2801,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
               <img src="../images/swagger.png" alt="Interactive Swagger UI rendering the dashboard's OpenAPI 3.0 spec, with collapsible endpoint groups, request/response schemas, and try-it-out controls" width="3024" height="1666" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📘</span> Swagger UI at <code>/api/docs</code> — auto-generated interactive playground for every REST endpoint. Try-it-out forms, request/response schema, auth headers, and curl snippets</div>
+              <div class="screenshot-caption"><span class="caption-icon">📘</span> <span>Swagger UI at <code>/api/docs</code> — auto-generated interactive playground for every REST endpoint. Try-it-out forms, request/response schema, auth headers, and curl snippets</span></div>
             </div>
           </div>
 
@@ -3172,7 +3173,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
           <div class="screenshot-gallery gallery-single">
             <div class="screenshot-card">
               <img src="../images/import.png" alt="Settings page Import History section showing rescan default folder, scan custom path, and upload controls with progress output" width="3024" height="1746" loading="lazy" decoding="async" />
-              <div class="screenshot-caption"><span class="caption-icon">📥</span> Settings → Import History — rescan default paths, set a custom directory, or drag-and-drop <code>.gz</code> archives. Progress bar and result card show counts for every run</div>
+              <div class="screenshot-caption"><span class="caption-icon">📥</span> <span>Settings → Import History — rescan default paths, set a custom directory, or drag-and-drop <code>.gz</code> archives. Progress bar and result card show counts for every run</span></div>
             </div>
           </div>
 
@@ -4678,6 +4679,146 @@ xattr -cr "/Applications/Claude Code Monitor.app"</code></pre>
           </p>
         </section>
 
+        <!-- ─── Tabby ──────────────────────────────────────────────────────── -->
+        <section id="tabby">
+          <div class="section-label">◈ Components &amp; UI</div>
+          <h2>🐾 Tabby — Reactive Cat Companion</h2>
+
+          <p>
+            <strong>Tabby</strong> is a cute SVG cat companion pinned to the
+            <strong>edges of every page</strong> of the dashboard. It is always
+            present and turns the live session stream into glanceable, ambient feedback — calm when
+            idle, alert when something needs attention, and celebratory when a run finishes. Tabby
+            is built entirely on the existing <code>eventBus</code> WebSocket stream:
+            <strong>no new backend, no API key, and no new dependencies</strong>. The component
+            lives in <code>client/src/components/Tabby/</code> and can be toggled on or off in
+            Settings page.
+          </p>
+
+          <div class="screenshot-gallery gallery-single">
+            <div class="screenshot-card">
+              <img src="../images/tabby.png" alt="Tabby Companio" width="3024" height="1746" loading="lazy" decoding="async" />
+              <div class="screenshot-caption"><span class="caption-icon">📥</span> Tabby Companion — a cute SVG cat in the edges of every page, reacting in real time to the live session stream with eight distinct moods and animations, auto-surfacing speech bubbles for notable events, and serving as the gateway to a status panel and Ask box</div>
+            </div>
+          </div>
+
+          <h3>Reactive Mascot — Eight Moods</h3>
+          <p>
+            Tabby derives one of eight moods from the live session WebSocket stream, each with its
+            own animation. The eyes track your cursor, and the active mood drives a distinct motion
+            cue.
+          </p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mood</th>
+                  <th>When it appears</th>
+                  <th>Animation</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Idle</td>
+                  <td>Nothing notable happening</td>
+                  <td>Gentle tail flick</td>
+                </tr>
+                <tr>
+                  <td>Watching</td>
+                  <td>Sessions active, observing the stream</td>
+                  <td>Ear perk, cursor-tracking eyes</td>
+                </tr>
+                <tr>
+                  <td>Happy</td>
+                  <td>A run completed successfully</td>
+                  <td>Sparkle</td>
+                </tr>
+                <tr>
+                  <td>Worried</td>
+                  <td>Something looks off</td>
+                  <td>Head bob</td>
+                </tr>
+                <tr>
+                  <td>Stuck</td>
+                  <td>A session appears blocked</td>
+                  <td>Shake + alert <code>!</code></td>
+                </tr>
+                <tr>
+                  <td>Thinking</td>
+                  <td>Work in progress</td>
+                  <td>Head bob</td>
+                </tr>
+                <tr>
+                  <td>Sleeping</td>
+                  <td>Quiet for a while</td>
+                  <td>Zzz</td>
+                </tr>
+                <tr>
+                  <td>Disconnected</td>
+                  <td>WebSocket offline</td>
+                  <td>Calm, dimmed state</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Auto-Surface Speech Bubbles</h3>
+          <p>
+            Notable events — session started or finished, errors, and run completed — automatically
+            surface a speech bubble. Bubbles are <strong>throttled and coalesced</strong> so bursts
+            of events never spam you, and they can be muted on demand. Everything reflects in real
+            time over the existing <code>eventBus</code> WebSocket channel, with no polling and no
+            extra services.
+          </p>
+
+          <h3>The ⌘B Panel</h3>
+          <p>
+            Click the cat — or press <code>⌘B</code> / <code>Ctrl+B</code> — to open Tabby's panel
+            (<code>Esc</code> closes it). The panel groups a live status line, quick actions, and an
+            Ask box.
+          </p>
+          <ul>
+            <li>
+              <strong>Live status line:</strong> <em>N live · M errored · connection state</em>,
+              updated from cached data.
+            </li>
+            <li>
+              <strong>Quick actions:</strong> jump to
+              Run Claude, Activity, Sessions, or errored sessions; mute
+              bubbles; clear alerts.
+            </li>
+            <li>
+              <strong>Ask box:</strong> answers simple status questions locally from cached data
+              (&ldquo;what's running&rdquo;, &ldquo;any errors&rdquo;, &ldquo;status&rdquo;).
+            </li>
+          </ul>
+
+          <h3>Ask → Run Claude Handoff</h3>
+          <p>
+            The Ask box answers status questions instantly and offline from cached data. For
+            anything beyond a simple status question, Tabby hands off to the existing
+            <strong>Run Claude</strong> page (<code>/run?prompt=...</code>) to spawn a real Claude
+            Code session — so there is never a separate model call, key, or service to manage.
+          </p>
+
+          <h3>Accessibility &amp; Resilience</h3>
+          <ul>
+            <li>
+              Fully keyboard operable: <code>⌘B</code> / <code>Ctrl+B</code> to open,
+              <code>Esc</code> to close.
+            </li>
+            <li>
+              Status and bubbles announce via <code>aria-live</code> for screen readers.
+            </li>
+            <li>
+              Respects <code>prefers-reduced-motion</code> to calm animations.
+            </li>
+            <li>
+              Degrades gracefully to a calm, dimmed disconnected state when offline.
+            </li>
+          </ul>
+        </section>
+
         <!-- ─── Deployment ─────────────────────────────────────────────────── -->
         <section id="deployment">
           <div class="section-label">◈ Operations</div>
@@ -5475,6 +5616,52 @@ npm run install-hooks</code></pre>
           setTimeout(openScreenshot, 200);
         });
         window.addEventListener("hashchange", openScreenshot);
+      })();
+      (function () {
+        // Robust initial-hash navigation. Opening the page directly with a
+        // section hash (e.g. .../wiki/#tabby) lets the browser scroll BEFORE
+        // images, fonts, and reveal animations finish laying out, so the
+        // target shifts down afterwards and the page lands short of it. The
+        // sidebar links land correctly because they're clicked once layout has
+        // already settled. We reproduce that settled landing here by
+        // re-aligning the target (native block:"start", same as the sidebar)
+        // as the layout stabilizes — and we bail the instant the user scrolls
+        // so we never fight their input.
+        var SPECIAL = ["#feat-", "#ss-"]; // owned by the carousel/lightbox logic above
+        function isSpecial(h) {
+          return SPECIAL.some(function (p) { return h.indexOf(p) === 0; });
+        }
+        var hash = window.location.hash;
+        if (!hash || hash.length < 2 || isSpecial(hash)) return;
+
+        var cancelled = false;
+        function cancel() { cancelled = true; }
+        ["wheel", "touchstart", "keydown", "mousedown"].forEach(function (ev) {
+          window.addEventListener(ev, cancel, { passive: true, once: true });
+        });
+
+        function targetEl() {
+          var id = hash.slice(1);
+          try { return document.getElementById(decodeURIComponent(id)); }
+          catch (e) { return document.getElementById(id); }
+        }
+        function align() {
+          if (cancelled) return;
+          var el = targetEl();
+          if (el) el.scrollIntoView({ block: "start" });
+        }
+
+        align();
+        document.addEventListener("DOMContentLoaded", align);
+        window.addEventListener("load", function () {
+          align();
+          // Correct for late layout shifts (fonts, reveal animations, etc.).
+          [120, 350, 700, 1200].forEach(function (d) { setTimeout(align, d); });
+          // And once any still-loading image settles into its final height.
+          Array.prototype.forEach.call(document.images, function (img) {
+            if (!img.complete) img.addEventListener("load", align, { once: true });
+          });
+        });
       })();
       (function () {
         const btn = document.getElementById("sidebar-toggle");
