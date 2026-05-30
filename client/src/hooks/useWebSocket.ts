@@ -61,8 +61,11 @@ export function useWebSocket(onMessage: MessageHandler) {
       if (mountedRef.current) {
         setConnected(false);
         eventBus.setConnected(false);
-        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+        // Exponential backoff capped low (0.5s, 1s, 2s, 3s max) so a server
+        // restart is picked up within a few seconds rather than after a long
+        // idle wait. The focus/online/visibility listeners below reconnect
+        // instantly on top of this for the common "user comes back" case.
+        const delay = Math.min(500 * Math.pow(2, reconnectAttempts.current), 3000);
         reconnectAttempts.current++;
         reconnectTimer.current = setTimeout(connect, delay);
       }
@@ -92,6 +95,35 @@ export function useWebSocket(onMessage: MessageHandler) {
         ws.close();
         wsRef.current = null;
       }
+    };
+  }, [connect]);
+
+  // Reconnect *immediately* when the user/network signals the server is likely
+  // back: tab refocus, regained network, or page becoming visible again. This
+  // cancels any pending backoff timer and resets the attempt counter so we
+  // don't sit out a long delay — e.g. after the dashboard server restarts, the
+  // socket (and the Tabby eyes) recover the moment you look at the tab.
+  useEffect(() => {
+    const reconnectNow = () => {
+      if (!mountedRef.current) return;
+      const ws = wsRef.current;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        return; // already connected / connecting
+      }
+      clearTimeout(reconnectTimer.current);
+      reconnectAttempts.current = 0;
+      connect();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") reconnectNow();
+    };
+    window.addEventListener("focus", reconnectNow);
+    window.addEventListener("online", reconnectNow);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", reconnectNow);
+      window.removeEventListener("online", reconnectNow);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [connect]);
 
