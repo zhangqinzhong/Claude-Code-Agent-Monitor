@@ -126,10 +126,13 @@ describe("calculateCost — token rates", () => {
     assert.equal(r.total_cost, 7.75);
   });
 
-  it("falls back to zero cost when no rule matches", () => {
+  it("falls back to zero cost when no rule matches and surfaces the unpriced model", () => {
     const r = calculateCost([bucket({ model: "gpt-4o", input_tokens: M })], RULES);
     assert.equal(r.total_cost, 0);
     assert.equal(r.breakdown[0].matched_rule, null);
+    assert.equal(r.unpriced_models.length, 1);
+    assert.equal(r.unpriced_models[0].model, "gpt-4o");
+    assert.equal(r.unpriced_models[0].input_tokens, M);
   });
 });
 

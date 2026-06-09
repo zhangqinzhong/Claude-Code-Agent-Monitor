@@ -871,6 +871,20 @@ function createOpenApiSpec() {
                 code_execution_free_hours: { type: "number" },
               },
             },
+            unpriced_models: {
+              type: "array",
+              description: "Models with usage but no matching pricing rule (cost not counted)",
+              items: {
+                type: "object",
+                properties: {
+                  model: { type: "string" },
+                  input_tokens: { type: "integer" },
+                  output_tokens: { type: "integer" },
+                  cache_read_tokens: { type: "integer" },
+                  cache_write_tokens: { type: "integer" },
+                },
+              },
+            },
           },
         },
         DeleteOkResponse: {

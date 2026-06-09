@@ -160,11 +160,20 @@ export interface CostFeatureCosts {
   code_execution_free_hours: number;
 }
 
+export interface UnpricedModel {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+}
+
 export interface CostResult {
   total_cost: number;
   breakdown: CostBreakdown[];
   daily_costs: Array<{ date: string; cost: number }>;
   feature_costs?: CostFeatureCosts;
+  unpriced_models?: UnpricedModel[];
 }
 
 export interface ImportProgressMessage {

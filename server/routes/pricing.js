@@ -78,12 +78,31 @@ function calculateCost(tokenRows, pricingRules) {
   let webSearchCost = 0;
   let codeExecHours = 0;
   const breakdown = [];
+  // Track buckets that matched NO pricing rule. Their cost is $0, which would
+  // silently under-report the true total — surface them so the number is honest
+  // and the user knows to add a rule (e.g. a brand-new model id).
+  const unpriced = new Map();
 
   for (const row of tokenRows) {
     const rule = sortedRules.find((p) => {
       const pattern = p.model_pattern.replace(/%/g, ".*");
       return new RegExp("^" + pattern + "$").test(row.model);
     });
+
+    if (!rule) {
+      const u = unpriced.get(row.model) || {
+        model: row.model,
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_read_tokens: 0,
+        cache_write_tokens: 0,
+      };
+      u.input_tokens += row.input_tokens || 0;
+      u.output_tokens += row.output_tokens || 0;
+      u.cache_read_tokens += row.cache_read_tokens || 0;
+      u.cache_write_tokens += row.cache_write_tokens || 0;
+      unpriced.set(row.model, u);
+    }
 
     const { rIn, rOut, rRead, r5m, r1h } = ratesForBucket(rule, row);
     const cw1h = row.cache_write_1h_tokens || 0;
@@ -141,6 +160,8 @@ function calculateCost(tokenRows, pricingRules) {
       code_execution_hours_estimated: round4(codeExecHours),
       code_execution_free_hours: CODE_EXEC_FREE_HOURS,
     },
+    // Models with usage but no matching pricing rule (cost not counted).
+    unpriced_models: [...unpriced.values()],
   };
 }
 
