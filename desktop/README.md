@@ -51,15 +51,27 @@ npm run desktop:install  # install Electron, electron-builder, types into deskto
 npm run desktop:dev      # tsc → launch Electron pointing at out/main.js
 npm run desktop:test     # smoke test (spawn Electron + probe /api/health)
 
-# Build a DMG:
+# Build a DMG (macOS):
 npm run desktop:dmg          # universal (x64 + arm64) — correct for release, SLOW
 npm run desktop:dmg:arm64    # Apple Silicon only — fast, for your own machine
 npm run desktop:dmg:x64      # Intel only — fast
+
+# Build a Windows .exe (run on Windows x64):
+npm run desktop:win          # NSIS installer → release/ClaudeCodeMonitor-Setup-<ver>-x64.exe
+npm run desktop:win:portable # no-install portable → release/ClaudeCodeMonitor-<ver>-x64-portable.exe
 ```
 
-> ⚠️ The **universal** build is intentionally slow (it builds the app twice and
-> merges the two architectures). For running on your own Mac, use the
+> ⚠️ The **universal** macOS build is intentionally slow (it builds the app
+> twice and merges the two architectures). For running on your own Mac, use the
 > arch-specific command. See [Build performance](#build-performance--read-this).
+
+> 🪟 **Windows builds run on Windows** (DMGs build on macOS). `desktop:win`
+> produces an **unsigned** installer — fine to run; SmartScreen may show a
+> "More info → Run anyway" prompt on first launch. The icon (`assets/icon.ico`)
+> is generated from `assets/icon.png` by `npm run build:win-icon`
+> (PowerShell + .NET, no extra tooling). `better-sqlite3` is fetched as a
+> prebuilt Electron binary by `npm run desktop:install`, so no Visual Studio
+> C++ toolchain is required for the common case.
 
 ---
 
@@ -496,10 +508,13 @@ and fails with *"entry file out/main.js does not exist"*).
 | `npm run desktop:build` | `npm run build` | Prebuild guard + `tsc` → `out/`. |
 | `npm run desktop:dev` | `npm run dev` | Build, then launch Electron against `out/main.js`. |
 | `npm run desktop:test` | `npm test` | Build, then run the smoke test. |
-| `npm run desktop:dmg` | `npm run dmg` | **Universal** DMG (x64 + arm64). Correct for release. **Slow.** |
-| `npm run desktop:dmg:arm64` | `npm run dmg:arm64` | Apple-Silicon-only DMG. **Fast.** |
-| `npm run desktop:dmg:x64` | `npm run dmg:x64` | Intel-only DMG. **Fast.** |
-| — | `npm run build:icons` | Regenerate `icon.icns` + tray PNGs from the SVGs. |
+| `npm run desktop:dmg` | `npm run dmg` | **macOS:** universal DMG (x64 + arm64). Correct for release. **Slow.** |
+| `npm run desktop:dmg:arm64` | `npm run dmg:arm64` | **macOS:** Apple-Silicon-only DMG. **Fast.** |
+| `npm run desktop:dmg:x64` | `npm run dmg:x64` | **macOS:** Intel-only DMG. **Fast.** |
+| `npm run desktop:win` | `npm run win` | **Windows:** NSIS installer `.exe` (x64). |
+| `npm run desktop:win:portable` | `npm run win:portable` | **Windows:** no-install portable `.exe` (x64). |
+| — | `npm run build:icons` | **macOS:** regenerate `icon.icns` + tray PNGs from the SVGs. |
+| — | `npm run build:win-icon` | **Windows:** regenerate `icon.ico` from `icon.png` (PowerShell + .NET). |
 | — | `npm run clean` | Remove `out/` and `release/`. |
 
 > **After `npm run clean`** you must `npm run build` again before packaging —

@@ -8,14 +8,15 @@
  *   4. On `window-all-closed`: keep the app running (tray-only mode).
  *   5. On `before-quit`: gracefully stop the server if we own it.
  *
- * The macOS single-instance guarantee is enforced via `requestSingleInstanceLock`
- * so double-launching just focuses the existing window.
+ * Single-instance is enforced on every platform via `requestSingleInstanceLock`
+ * so double-launching (a second Dock click, or the Windows Start-Menu shortcut)
+ * just focuses the existing window instead of spawning a second tray + server.
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
 import { BrowserWindow, Notification, app, dialog, shell } from "electron";
 
-import { APP_NAME } from "./constants";
+import { APP_ID, APP_NAME } from "./constants";
 import { isOpenAtLogin, launchedAtLogin, toggleOpenAtLogin } from "./login-item";
 import { log } from "./logger";
 import { focusOrCreateWindow, installApplicationMenu } from "./menu";
@@ -58,6 +59,9 @@ const state: AppState = {
 function requestQuit(): void {
   if (state.quitting || state.confirmingQuit) return;
   state.confirmingQuit = true;
+  // On macOS a second ⌘Q while this dialog is open bypasses it (handled in
+  // `before-quit`); mention that shortcut only where it applies.
+  const quitAccel = process.platform === "darwin" ? "⌘Q" : "Ctrl+Q";
   const opts: Electron.MessageBoxOptions = {
     type: "question",
     buttons: ["Quit", "Cancel"],
@@ -67,7 +71,7 @@ function requestQuit(): void {
     message: "Quit Claude Code Monitor?",
     detail:
       "The embedded server will stop and your dashboard window will close. " +
-      "Press ⌘Q again to skip this prompt and quit immediately.",
+      `Press ${quitAccel} again to skip this prompt and quit immediately.`,
     noLink: true,
   };
   const parent = state.win && !state.win.isDestroyed() ? state.win : undefined;
@@ -243,6 +247,11 @@ function wireLifecycle(): void {
 }
 
 app.setName(APP_NAME);
+// Windows: associate this process with the installed app's AppUserModelID so
+// `new Notification()` toasts (e.g. "Server restarted") render under the app's
+// name/icon and taskbar windows group correctly. Must be set before any window
+// or notification is created. No-op on macOS/Linux.
+if (process.platform === "win32") app.setAppUserModelId(APP_ID);
 wireLifecycle();
 app
   .whenReady()

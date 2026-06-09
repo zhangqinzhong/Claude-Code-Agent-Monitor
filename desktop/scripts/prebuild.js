@@ -28,7 +28,13 @@ const rootNodeModules = path.join(repoRoot, "node_modules");
 const assets = path.join(desktopRoot, "assets");
 
 function run(cmd, args, opts = {}) {
-  const result = spawnSync(cmd, args, { stdio: "inherit", ...opts });
+  // On Windows `npm`/`npx` are `.cmd` shims that `spawnSync` can only launch
+  // through a shell; without this it fails with ENOENT. POSIX is unaffected.
+  const result = spawnSync(cmd, args, {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+    ...opts,
+  });
   if (result.status !== 0) {
     throw new Error(`${cmd} ${args.join(" ")} failed with exit ${result.status}`);
   }
