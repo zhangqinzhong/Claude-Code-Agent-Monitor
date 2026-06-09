@@ -34,7 +34,9 @@
       "apiPricingBody": "Đây là đơn giá API trả theo lượng dùng. Nếu bạn dùng Claude Code theo gói thuê bao (Pro, Max, Team hoặc Enterprise), chi phí thực tế là phí cố định hàng tháng chứ không tính theo token — nên những con số ở đây thường cao hơn số tiền bạn thực trả. Hãy xem chi phí ở đây là ước tính mức dùng để tham khảo, không phải hóa đơn."
     },
     "cacheWrite5m": "Ghi bộ nhớ đệm (5m)",
-    "cacheWrite1h": "Ghi bộ nhớ đệm (1h)"
+    "cacheWrite1h": "Ghi bộ nhớ đệm (1h)",
+    "fastInput": "Fast Input",
+    "fastOutput": "Fast Output"
   },
   "claudeHome": {
     "title": "CLAUDE_HOME",

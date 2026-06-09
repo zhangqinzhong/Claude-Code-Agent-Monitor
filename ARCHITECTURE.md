@@ -329,7 +329,7 @@ graph TD
 | `routes/events.js`        | Read-only event listing with session_id filter and pagination                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `routes/stats.js`         | Single aggregate query returning total/active counts + status distributions                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `routes/analytics.js`     | Extended analytics — token totals, tool usage counts, daily event/session trends, agent type distribution. The client-side analytics heatmap grid is aligned to a Sunday start for correct day-of-week positioning                                                                                                                                                                                                                                                                                                                   |
-| `routes/pricing.js`       | Model pricing CRUD (list/upsert/delete), per-session and global cost calculation with pattern-based model matching                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `routes/pricing.js`       | Model pricing CRUD (list/upsert/delete) and per-session / global cost calculation with pattern-based model matching. Cost is computed per token bucket — keyed by (model, speed, inference_geo, service_tier) — applying fast-mode premium, US data-residency (1.1x), and Batch (0.5x) modifiers, the 5m/1h cache-write split, plus server-tool surcharges (web search $10/1k; code execution estimated by container-time with the monthly free-hours allowance; web fetch free). Feature rates + modifier math live in `lib/pricing-constants.js`; usage normalization in `lib/token-usage.js` |
 | `routes/settings.js`      | System info (DB size, hook status, server uptime, transcript cache stats), data export as JSON, session cleanup (abandon stale, purge old), clear all data, reset pricing, reinstall hooks                                                                                                                                                                                                                                                                                                                                           |
 | `routes/workflows.js`     | Aggregate workflow visualization data (agent orchestration graphs, tool transition flows, collaboration networks, workflow pattern detection, model delegation, error propagation, concurrency timelines, session complexity metrics, compaction impact). Accepts `?status=active\|completed` query parameter to filter all data by session status. Per-session drill-in endpoint with agent tree, tool timeline, and event details |
 | `lib/transcript-cache.js` | Stat-based JSONL transcript cache with incremental byte-offset reads. Shared between `hooks.js` (token extraction on every event) and the periodic compaction scanner (`index.js`). Extracts tokens, compaction entries, API errors (`isApiErrorMessage` + raw error responses), turn durations (`system` subtype `turn_duration`), thinking block counts, and usage extras (service_tier, speed, inference_geo). Uses `(path, mtime, size)` cache key — unchanged files return cached results instantly, grown files only parse new bytes, shrunk files (compaction) trigger full re-read. Each cache entry stores **only** `{mtimeMs, size, bytesRead, result}` — the previous shape that duplicated every growable array at both the top level and inside `result` is gone, halving steady-state memory per entry. Per-entry growable arrays (`turnDurations`, `errors`, `compaction.entries`, `usageExtras.*`) are bounded to `TRANSCRIPT_CACHE_MAX_ARRAY_LEN` (default `1000`, tail-kept) — older items remain in the `events` table thanks to hook dedup, so the cap only affects the in-memory view. Trimming runs both during parse (when an array reaches `2 * MAX_ARRAY_LEN`, amortized O(N)) and at finalize, so even a fresh full-file parse on a multi-day session cannot accumulate an unbounded transient before returning. **Chunked sync byte-stream reader** (`_streamRange`, 4 MiB chunks split on `0x0A` bytes — safe across UTF-8 multibyte sequences — with a growable per-line byte buffer capped at 64 MiB) replaces the previous `readFileSync("utf8")` so transcripts larger than V8's max JS string length (~512 MiB on 64-bit Node 20) parse without aborting Node with `FATAL ERROR: v8::ToLocalChecked Empty MaybeLocal`. Both full and incremental reads share the same line-level state machine (`_initParseState` / `_consumeLine` / `_finalizeState`). LRU eviction caps at 200 entries. Entries evicted on SessionEnd and abandoned session cleanup |
@@ -750,14 +750,18 @@ erDiagram
     token_usage {
         TEXT session_id PK "FK to sessions + part of composite PK"
         TEXT model PK "Model identifier + part of composite PK"
+        TEXT speed PK "standard or fast (fast mode) — pricing dimension"
+        TEXT inference_geo PK "global or us (data residency) — pricing dimension"
+        TEXT service_tier PK "standard or batch (Batch API) — pricing dimension"
         INTEGER input_tokens "Current JSONL total"
         INTEGER output_tokens "Current JSONL total"
         INTEGER cache_read_tokens "Current JSONL total"
-        INTEGER cache_write_tokens "Current JSONL total"
-        INTEGER baseline_input "Accumulated pre-compaction tokens"
-        INTEGER baseline_output "Accumulated pre-compaction tokens"
-        INTEGER baseline_cache_read "Accumulated pre-compaction tokens"
-        INTEGER baseline_cache_write "Accumulated pre-compaction tokens"
+        INTEGER cache_write_tokens "Total ephemeral cache writes (5m + 1h)"
+        INTEGER cache_write_1h_tokens "Subset stored at the 1h tier; 5m = total - 1h"
+        INTEGER web_search_requests "server_tool_use web search count"
+        INTEGER web_fetch_requests "server_tool_use web fetch count"
+        INTEGER code_execution_requests "server_tool_use code execution count"
+        INTEGER baseline_input "Accumulated pre-compaction tokens (one per metric)"
     }
 
     model_pricing {
@@ -765,8 +769,11 @@ erDiagram
         TEXT display_name "Human-readable name"
         REAL input_per_mtok "Cost per million input tokens"
         REAL output_per_mtok "Cost per million output tokens"
-        REAL cache_read_per_mtok "Cost per million cache read tokens"
-        REAL cache_write_per_mtok "Cost per million cache write tokens"
+        REAL cache_read_per_mtok "Cost per million cache read tokens (cache hits)"
+        REAL cache_write_per_mtok "Cost per million 5m cache-write tokens"
+        REAL cache_write_1h_per_mtok "Cost per million 1h cache-write tokens"
+        REAL fast_input_per_mtok "Fast-mode input rate (0 = none)"
+        REAL fast_output_per_mtok "Fast-mode output rate (0 = none)"
         TEXT updated_at "ISO 8601"
     }
 

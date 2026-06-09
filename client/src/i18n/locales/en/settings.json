@@ -34,7 +34,9 @@
       "apiPricingBody": "These are pay-as-you-go API rates. If you use Claude Code on a subscription plan (Pro, Max, Team, or Enterprise), your actual cost is a flat monthly fee, not per-token — so these figures will usually be higher than what you really pay. Treat the costs here as a usage estimate for reference, not a bill."
     },
     "cacheWrite5m": "Cache Write (5m)",
-    "cacheWrite1h": "Cache Write (1h)"
+    "cacheWrite1h": "Cache Write (1h)",
+    "fastInput": "Fast Input",
+    "fastOutput": "Fast Output"
   },
   "claudeHome": {
     "title": "CLAUDE_HOME",
