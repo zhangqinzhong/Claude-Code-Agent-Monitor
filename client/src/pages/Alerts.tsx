@@ -257,10 +257,24 @@ export function Alerts() {
 
   const set = (patch: Partial<RuleFormState>) => setForm((prev) => ({ ...prev, ...patch }));
 
+  // Mirror the server-side validation so obviously invalid rules never make
+  // it to a request: event_pattern needs at least one pattern field and a
+  // valid count/window, the time-based types need positive minutes, and
+  // token_threshold needs a positive token count.
+  const minutesVal = parseFloat(form.minutes);
+  const tokensVal = parseInt(form.total_tokens, 10);
+  const countVal = parseInt(form.count, 10);
+  const windowVal = parseFloat(form.window_minutes);
   const canSubmit =
     form.name.trim().length > 0 &&
     (form.rule_type !== "event_pattern" ||
-      Boolean(form.event_type.trim() || form.tool_name.trim() || form.summary_contains.trim()));
+      (Boolean(form.event_type.trim() || form.tool_name.trim() || form.summary_contains.trim()) &&
+        Number.isFinite(countVal) &&
+        countVal > 0 &&
+        (countVal <= 1 || (Number.isFinite(windowVal) && windowVal > 0)))) &&
+    ((form.rule_type !== "inactivity" && form.rule_type !== "status_duration") ||
+      (Number.isFinite(minutesVal) && minutesVal > 0)) &&
+    (form.rule_type !== "token_threshold" || (Number.isFinite(tokensVal) && tokensVal > 0));
 
   return (
     <div className="space-y-6">

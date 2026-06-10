@@ -10,6 +10,7 @@ const { stmts, db } = dbModule;
 const { broadcast } = require("../websocket");
 const TranscriptCache = require("../lib/transcript-cache");
 const { scanAndImportSubagents } = require("../../scripts/import-history");
+const { evaluateEvent } = require("../lib/alerts");
 
 const router = Router();
 
@@ -740,7 +741,7 @@ router.post("/event", (req, res) => {
   // and the response is on its way — alerting must never slow down or fail
   // hook ingestion (evaluateEvent itself is also internally fail-safe).
   try {
-    require("../lib/alerts").evaluateEvent(result);
+    evaluateEvent(result);
   } catch {
     /* non-fatal */
   }

@@ -115,8 +115,10 @@ router.delete("/rules/:id", (req, res) => {
 // GET /api/alerts - Fired-alert feed, newest first. ?unacked=true filters to
 // unacknowledged alerts; limit/offset paginate.
 router.get("/", (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
-  const offset = parseInt(req.query.offset, 10) || 0;
+  // Clamp to sane bounds — negative values would make SQLite's LIMIT/OFFSET
+  // misbehave (a negative LIMIT means "no limit").
+  const limit = Math.max(1, Math.min(parseInt(req.query.limit, 10) || 50, 200));
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
   const unackedOnly = req.query.unacked === "true";
 
   const alerts = unackedOnly

@@ -173,6 +173,20 @@ function matchesPattern(event, cfg) {
 // query for the rest of the event stream.
 const TOKEN_BEARING_EVENTS = new Set(["PostToolUse", "Stop", "SubagentStop", "SessionEnd"]);
 
+// Sweep queries are static — prepare once at module load instead of on every
+// 60s tick. The time window arrives as a strftime modifier parameter.
+const staleSessionsStmt = db.prepare(
+  `SELECT id, name FROM sessions
+   WHERE status = 'active'
+     AND updated_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
+);
+const stuckAgentsStmt = db.prepare(
+  `SELECT a.id, a.session_id, a.name FROM agents a
+   JOIN sessions s ON s.id = a.session_id
+   WHERE s.status = 'active' AND a.status = ?
+     AND a.updated_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
+);
+
 /**
  * Evaluate event-driven rules against one freshly ingested event. Must never
  * throw — hook ingestion stays fail-safe regardless of rule misconfiguration.
@@ -248,13 +262,7 @@ function sweepTimeRules() {
       if (rule.rule_type === "inactivity") {
         // sessions.updated_at is bumped on every ingested event (touchSession),
         // so "stale updated_at on an active session" ≡ "no events for N min".
-        const stale = db
-          .prepare(
-            `SELECT id, name FROM sessions
-             WHERE status = 'active'
-               AND updated_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
-          )
-          .all(`-${rule.config.minutes * 60} seconds`);
+        const stale = staleSessionsStmt.all(`-${rule.config.minutes * 60} seconds`);
         for (const session of stale) {
           fireAlert(rule, {
             sessionId: session.id,
@@ -266,14 +274,10 @@ function sweepTimeRules() {
         // agents.updated_at moves on any agent update (status flips, tool
         // changes), so this detects agents *stuck* in a status with no
         // activity — the hung-agent case the rule exists for.
-        const stuck = db
-          .prepare(
-            `SELECT a.id, a.session_id, a.name FROM agents a
-             JOIN sessions s ON s.id = a.session_id
-             WHERE s.status = 'active' AND a.status = ?
-               AND a.updated_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)`
-          )
-          .all(rule.config.status, `-${rule.config.minutes * 60} seconds`);
+        const stuck = stuckAgentsStmt.all(
+          rule.config.status,
+          `-${rule.config.minutes * 60} seconds`
+        );
         for (const agent of stuck) {
           fireAlert(rule, {
             sessionId: agent.session_id,
