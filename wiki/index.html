@@ -82,7 +82,7 @@
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
     />
-    <link rel="stylesheet" href="style.css?v=9" />
+    <link rel="stylesheet" href="style.css?v=10" />
 
     <!-- Global page styles -->
     <style>
@@ -5038,6 +5038,84 @@ xattr -cr "/Applications/Claude Code Monitor.app"</code></pre>
           </p>
         </section>
 
+        <!-- ─── Internationalization ──────────────────────────────────────── -->
+        <section id="i18n">
+          <div class="section-label">◈ Integrations</div>
+          <h2>Internationalization (i18n)</h2>
+
+          <p>
+            The entire UI ships in <strong>three languages — English, 简体中文, and Tiếng Việt</strong>
+            — built on <code>i18next</code> + <code>react-i18next</code> with
+            <code>i18next-browser-languagedetector</code>. Coverage is end-to-end: every page, chart
+            tooltip, Settings flow, Workflow narrative, Config Explorer tab, Run page, and the Alerts
+            rule-help tooltips + webhook setup guides are translated. Switch languages from the
+            sidebar (EN / 中文 / VI) — the choice persists in <code>localStorage</code>.
+          </p>
+
+          <div class="feature-grid">
+            <div class="feature-card">
+              <div class="feature-icon ic-indigo">🗂️</div>
+              <h3>Namespaced resources</h3>
+              <p>
+                Translations are split into per-area JSON namespaces (<code>common</code>,
+                <code>nav</code>, <code>dashboard</code>, <code>sessions</code>,
+                <code>analytics</code>, <code>workflows</code>, <code>settings</code>,
+                <code>kanban</code>, <code>run</code>, <code>ccConfig</code>, <code>alerts</code>,
+                <code>errors</code>, <code>updates</code>) under
+                <code>client/src/i18n/locales/&lt;lng&gt;/</code>. Components load only the
+                namespaces they need via <code>useTranslation("…")</code>.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon ic-emerald">🔎</div>
+              <h3>Detection &amp; fallback</h3>
+              <p>
+                Language is detected from <code>localStorage</code> (<code>i18nextLng</code>) then
+                the browser's <code>navigator</code> setting, and the choice is cached back to
+                <code>localStorage</code>. <code>fallbackLng</code> is English and
+                <code>nonExplicitSupportedLngs</code> resolves regional tags (e.g.
+                <code>vi-VN</code> → <code>vi</code>), so any unmapped key falls back gracefully
+                rather than rendering a raw key.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon ic-amber">🔢</div>
+              <h3>Locale-aware formatting</h3>
+              <p>
+                Numbers, costs, dates, and relative times format against the active locale via a
+                shared <code>getCurrentLocale()</code> helper, and plurals use i18next's
+                <code>_one</code> / <code>_other</code> suffixes. Interpolated values
+                (<code>{{count}}</code>, <code>{{provider}}</code>, …) keep sentences natural across
+                languages.
+              </p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-icon ic-rose">🔤</div>
+              <h3>Technical terms preserved</h3>
+              <p>
+                Domain terms that are proper nouns or code stay untranslated in every locale —
+                <em>Agent</em>, <em>Subagent</em>, hook event names (<code>PostToolUse</code>),
+                tool names (<code>Bash</code>), and webhook provider names (Slack, PagerDuty). Only
+                the surrounding prose is localized, so instructions stay accurate.
+              </p>
+            </div>
+          </div>
+
+          <div class="callout callout-info">
+            <div class="callout-icon">ℹ</div>
+            <div class="callout-body">
+              <strong>Adding a language</strong>
+              <p>
+                Copy <code>client/src/i18n/locales/en/</code> to a new locale folder, translate the
+                JSON values (leaving keys and technical terms intact), then register the bundle and
+                add the tag to <code>supportedLngs</code> in <code>client/src/i18n/index.ts</code>.
+                Missing keys fall back to English automatically, so even a partial translation ships
+                cleanly.
+              </p>
+            </div>
+          </div>
+        </section>
+
         <!-- ─── Tabby ──────────────────────────────────────────────────────── -->
         <section id="tabby">
           <div class="section-label">◈ Components &amp; UI</div>
@@ -5176,84 +5254,6 @@ xattr -cr "/Applications/Claude Code Monitor.app"</code></pre>
               Degrades gracefully to a calm, dimmed disconnected state when offline.
             </li>
           </ul>
-        </section>
-
-        <!-- ─── Internationalization ──────────────────────────────────────── -->
-        <section id="i18n">
-          <div class="section-label">◈ Integrations</div>
-          <h2>Internationalization (i18n)</h2>
-
-          <p>
-            The entire UI ships in <strong>three languages — English, 简体中文, and Tiếng Việt</strong>
-            — built on <code>i18next</code> + <code>react-i18next</code> with
-            <code>i18next-browser-languagedetector</code>. Coverage is end-to-end: every page, chart
-            tooltip, Settings flow, Workflow narrative, Config Explorer tab, Run page, and the Alerts
-            rule-help tooltips + webhook setup guides are translated. Switch languages from the
-            sidebar (EN / 中文 / VI) — the choice persists in <code>localStorage</code>.
-          </p>
-
-          <div class="feature-grid">
-            <div class="feature-card">
-              <div class="feature-icon ic-indigo">🗂️</div>
-              <h3>Namespaced resources</h3>
-              <p>
-                Translations are split into per-area JSON namespaces (<code>common</code>,
-                <code>nav</code>, <code>dashboard</code>, <code>sessions</code>,
-                <code>analytics</code>, <code>workflows</code>, <code>settings</code>,
-                <code>kanban</code>, <code>run</code>, <code>ccConfig</code>, <code>alerts</code>,
-                <code>errors</code>, <code>updates</code>) under
-                <code>client/src/i18n/locales/&lt;lng&gt;/</code>. Components load only the
-                namespaces they need via <code>useTranslation("…")</code>.
-              </p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon ic-emerald">🔎</div>
-              <h3>Detection &amp; fallback</h3>
-              <p>
-                Language is detected from <code>localStorage</code> (<code>i18nextLng</code>) then
-                the browser's <code>navigator</code> setting, and the choice is cached back to
-                <code>localStorage</code>. <code>fallbackLng</code> is English and
-                <code>nonExplicitSupportedLngs</code> resolves regional tags (e.g.
-                <code>vi-VN</code> → <code>vi</code>), so any unmapped key falls back gracefully
-                rather than rendering a raw key.
-              </p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon ic-amber">🔢</div>
-              <h3>Locale-aware formatting</h3>
-              <p>
-                Numbers, costs, dates, and relative times format against the active locale via a
-                shared <code>getCurrentLocale()</code> helper, and plurals use i18next's
-                <code>_one</code> / <code>_other</code> suffixes. Interpolated values
-                (<code>{{count}}</code>, <code>{{provider}}</code>, …) keep sentences natural across
-                languages.
-              </p>
-            </div>
-            <div class="feature-card">
-              <div class="feature-icon ic-rose">🔤</div>
-              <h3>Technical terms preserved</h3>
-              <p>
-                Domain terms that are proper nouns or code stay untranslated in every locale —
-                <em>Agent</em>, <em>Subagent</em>, hook event names (<code>PostToolUse</code>),
-                tool names (<code>Bash</code>), and webhook provider names (Slack, PagerDuty). Only
-                the surrounding prose is localized, so instructions stay accurate.
-              </p>
-            </div>
-          </div>
-
-          <div class="callout callout-info">
-            <div class="callout-icon">ℹ</div>
-            <div class="callout-body">
-              <strong>Adding a language</strong>
-              <p>
-                Copy <code>client/src/i18n/locales/en/</code> to a new locale folder, translate the
-                JSON values (leaving keys and technical terms intact), then register the bundle and
-                add the tag to <code>supportedLngs</code> in <code>client/src/i18n/index.ts</code>.
-                Missing keys fall back to English automatically, so even a partial translation ships
-                cleanly.
-              </p>
-            </div>
-          </div>
         </section>
 
         <!-- ─── Deployment ─────────────────────────────────────────────────── -->
@@ -5893,7 +5893,7 @@ npm run install-hooks</code></pre>
     </div>
     <!-- /.wiki-layout -->
 
-    <script src="script.js?v=22" defer></script>
+    <script src="script.js?v=23" defer></script>
     <script>
       (function () {
         var carousel = document.getElementById("feature-carousel");
