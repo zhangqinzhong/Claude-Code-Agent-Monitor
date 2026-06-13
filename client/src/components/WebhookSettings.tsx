@@ -27,6 +27,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { Select } from "./Select";
 import { timeAgo } from "../lib/format";
 import type {
   AlertRule,
@@ -498,27 +499,22 @@ export function WebhookSettings() {
             </label>
             <label className="block">
               <span className="text-[11px] text-gray-500">{t("webhooks.fieldType")}</span>
-              <select
-                value={form.type}
-                disabled={isEdit}
-                onChange={(e) => {
-                  const type = e.target.value as WebhookType;
-                  set({
-                    type,
-                    config: defaultsFor(providerOf(type)),
-                    url: "",
-                    secret: "",
-                    headerRows: [],
-                  });
-                }}
-                className="input w-full mt-1 text-sm disabled:opacity-60"
-              >
-                {providers.map((p) => (
-                  <option key={p.type} value={p.type}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-1">
+                <Select<WebhookType>
+                  value={form.type}
+                  disabled={isEdit}
+                  onChange={(type) =>
+                    set({
+                      type,
+                      config: defaultsFor(providerOf(type)),
+                      url: "",
+                      secret: "",
+                      headerRows: [],
+                    })
+                  }
+                  options={providers.map((p) => ({ value: p.type, label: p.label }))}
+                />
+              </div>
             </label>
           </div>
 
@@ -560,17 +556,13 @@ export function WebhookSettings() {
                     {f.required && <span className="text-red-400"> *</span>}
                   </span>
                   {f.type === "enum" && f.options ? (
-                    <select
-                      value={form.config[f.key] ?? f.default ?? ""}
-                      onChange={(e) => set({ config: { ...form.config, [f.key]: e.target.value } })}
-                      className="input w-full mt-1 text-sm"
-                    >
-                      {f.options.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="mt-1">
+                      <Select
+                        value={String(form.config[f.key] ?? f.default ?? "")}
+                        onChange={(v) => set({ config: { ...form.config, [f.key]: v } })}
+                        options={f.options.map((o) => ({ value: o, label: o }))}
+                      />
+                    </div>
                   ) : (
                     <input
                       type={f.secret ? "password" : "text"}
