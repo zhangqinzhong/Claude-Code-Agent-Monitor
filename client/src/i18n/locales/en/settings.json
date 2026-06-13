@@ -245,5 +245,6 @@
     "tabActivity": "Activity",
     "rulesHint": "Conditions that trigger an alert. Evaluated server-side against the live event stream.",
     "rulesEmptyHint": "Add a rule to start alerting on errors, inactivity, stuck agents, or token thresholds."
-  }
+  },
+  "jumpTo": "Jump to"
 }

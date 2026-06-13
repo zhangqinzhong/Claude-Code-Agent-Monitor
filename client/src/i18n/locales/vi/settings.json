@@ -245,5 +245,6 @@
     "tabActivity": "Hoạt động",
     "rulesHint": "Điều kiện kích hoạt cảnh báo. Được đánh giá ở phía máy chủ trên luồng sự kiện trực tiếp.",
     "rulesEmptyHint": "Thêm quy tắc để bắt đầu cảnh báo về lỗi, không hoạt động, agent bị treo hoặc ngưỡng token."
-  }
+  },
+  "jumpTo": "Chuyển tới"
 }

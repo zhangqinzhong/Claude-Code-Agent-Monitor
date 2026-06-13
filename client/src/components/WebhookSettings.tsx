@@ -29,6 +29,7 @@ import {
 import { api } from "../lib/api";
 import { Select } from "./Select";
 import { ConfirmModal } from "./ConfirmModal";
+import { Checkbox } from "./Checkbox";
 import { timeAgo } from "../lib/format";
 import type {
   AlertRule,
@@ -477,7 +478,7 @@ export function WebhookSettings() {
                 value={form.name}
                 onChange={(e) => set({ name: e.target.value })}
                 placeholder={t("webhooks.fieldNamePlaceholder")}
-                className="input w-full mt-1 py-1.5 text-[11px]"
+                className="input w-full mt-1 py-1.5 text-[11px] leading-normal"
               />
             </label>
             <label className="block">
@@ -518,7 +519,7 @@ export function WebhookSettings() {
                 placeholder={
                   isEdit ? t("webhooks.urlKeepPlaceholder") : provider.url_hint || "https://…"
                 }
-                className="input w-full mt-1 py-1.5 text-[11px] font-mono"
+                className="input w-full mt-1 py-1.5 text-[11px] leading-normal font-mono"
               />
             </label>
           )}
@@ -552,7 +553,7 @@ export function WebhookSettings() {
                       value={form.config[f.key] ?? ""}
                       onChange={(e) => set({ config: { ...form.config, [f.key]: e.target.value } })}
                       placeholder={f.secret && isEdit ? t("webhooks.secretKeepPlaceholder") : ""}
-                      className="input w-full mt-1 py-1.5 text-[11px] font-mono"
+                      className="input w-full mt-1 py-1.5 text-[11px] leading-normal font-mono"
                     />
                   )}
                 </label>
@@ -572,7 +573,7 @@ export function WebhookSettings() {
                   placeholder={
                     isEdit ? t("webhooks.secretKeepPlaceholder") : t("webhooks.secretPlaceholder")
                   }
-                  className="input w-full mt-1 py-1.5 text-[11px] font-mono"
+                  className="input w-full mt-1 py-1.5 text-[11px] leading-normal font-mono"
                 />
                 <span className="text-[10px] text-gray-600">{t("webhooks.secretHint")}</span>
               </label>
@@ -581,14 +582,12 @@ export function WebhookSettings() {
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] text-gray-500">{t("webhooks.fieldHeaders")}</span>
                   {isEdit && (
-                    <label className="inline-flex items-center gap-1.5 text-[10px] text-gray-500 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={form.replaceHeaders}
-                        onChange={(e) => set({ replaceHeaders: e.target.checked })}
-                      />
-                      {t("webhooks.replaceHeaders")}
-                    </label>
+                    <Checkbox
+                      checked={form.replaceHeaders}
+                      onChange={(v) => set({ replaceHeaders: v })}
+                      label={t("webhooks.replaceHeaders")}
+                      labelClassName="text-[10px] text-gray-500 group-hover:text-gray-400"
+                    />
                   )}
                 </div>
                 {(!isEdit || form.replaceHeaders) && (
@@ -605,7 +604,7 @@ export function WebhookSettings() {
                             })
                           }
                           placeholder={t("webhooks.headerKey")}
-                          className="input flex-1 py-1.5 text-[11px] font-mono"
+                          className="input flex-1 py-1.5 text-[11px] leading-normal font-mono"
                         />
                         <input
                           value={row.value}
@@ -617,7 +616,7 @@ export function WebhookSettings() {
                             })
                           }
                           placeholder={t("webhooks.headerValue")}
-                          className="input flex-1 py-1.5 text-[11px] font-mono"
+                          className="input flex-1 py-1.5 text-[11px] leading-normal font-mono"
                         />
                         <button
                           onClick={() =>
@@ -647,34 +646,28 @@ export function WebhookSettings() {
           {/* Optional per-rule scoping */}
           {rules.length > 0 && (
             <div className="pt-1 border-t border-border">
-              <label className="inline-flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.scopeAll}
-                  onChange={(e) => set({ scopeAll: e.target.checked })}
-                />
-                {t("webhooks.scopeAll")}
-              </label>
+              <Checkbox
+                checked={form.scopeAll}
+                onChange={(v) => set({ scopeAll: v })}
+                label={t("webhooks.scopeAll")}
+                labelClassName="text-[11px] text-gray-400 group-hover:text-gray-300"
+              />
               {!form.scopeAll && (
                 <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1">
                   {rules.map((rule) => (
-                    <label
+                    <Checkbox
                       key={rule.id}
-                      className="inline-flex items-center gap-2 text-[11px] text-gray-400 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={form.ruleIds.includes(rule.id)}
-                        onChange={(e) =>
-                          set({
-                            ruleIds: e.target.checked
-                              ? [...form.ruleIds, rule.id]
-                              : form.ruleIds.filter((id) => id !== rule.id),
-                          })
-                        }
-                      />
-                      <span className="truncate">{rule.name}</span>
-                    </label>
+                      checked={form.ruleIds.includes(rule.id)}
+                      onChange={(checked) =>
+                        set({
+                          ruleIds: checked
+                            ? [...form.ruleIds, rule.id]
+                            : form.ruleIds.filter((id) => id !== rule.id),
+                        })
+                      }
+                      label={rule.name}
+                      labelClassName="text-[11px] text-gray-400 group-hover:text-gray-300 truncate"
+                    />
                   ))}
                 </div>
               )}

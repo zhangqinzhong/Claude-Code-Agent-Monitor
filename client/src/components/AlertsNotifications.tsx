@@ -33,6 +33,7 @@ import { EmptyState } from "./EmptyState";
 import { Skeleton } from "./Skeleton";
 import { WebhookSettings } from "./WebhookSettings";
 import { ConfirmModal } from "./ConfirmModal";
+import { Checkbox } from "./Checkbox";
 import { timeAgo } from "../lib/format";
 import type { AlertEvent, AlertRule, AlertRuleType, WSMessage } from "../lib/types";
 
@@ -602,15 +603,11 @@ export function AlertsNotifications() {
               )}
             </h4>
             <div className="flex items-center gap-2">
-              <label className="inline-flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={unackedOnly}
-                  onChange={(e) => setUnackedOnly(e.target.checked)}
-                  className="accent-current"
-                />
-                {t("feed.unackedOnly")}
-              </label>
+              <Checkbox
+                checked={unackedOnly}
+                onChange={setUnackedOnly}
+                label={t("feed.unackedOnly")}
+              />
               <button
                 onClick={() => loadAlerts()}
                 className="btn-ghost border border-border inline-flex items-center gap-1.5 text-xs"
