@@ -9,6 +9,34 @@
   "allSessions": "Tất cả phiên",
   "activeOnly": "Chỉ đang hoạt động",
   "completed": "Hoàn tất",
+  "runs": {
+    "title": "Lần chạy quy trình",
+    "subtitle": "Các nhóm Agent do công cụ Workflow tạo ra, dựng lại từ nhật ký chạy trên đĩa",
+    "sessionTitle": "Lần chạy quy trình",
+    "loading": "Đang tải các lần chạy quy trình…",
+    "empty": "Chưa có lần chạy quy trình nào. Các lần chạy của công cụ Workflow hiện ở đây sau khi nhật ký được ghi (khi hoàn tất).",
+    "noAgents": "Không có Agent con nào được ghi cho lần chạy này.",
+    "openSession": "Mở phiên gốc",
+    "tokens": "token",
+    "agents_one": "{{count}} Agent",
+    "agents_other": "{{count}} Agent",
+    "tools_one": "{{count}} lệnh gọi công cụ",
+    "tools_other": "{{count}} lệnh gọi công cụ",
+    "status": {
+      "running": "Đang chạy",
+      "completed": "Hoàn tất",
+      "error": "Lỗi",
+      "failed": "Thất bại"
+    },
+    "col": {
+      "agent": "Agent",
+      "phase": "Giai đoạn",
+      "state": "Trạng thái",
+      "tokens": "Token",
+      "tools": "Công cụ",
+      "duration": "Thời lượng"
+    }
+  },
   "chartInfo": {
     "labels": {
       "what": "Biểu đồ thể hiện điều gì",
