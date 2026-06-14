@@ -21,6 +21,8 @@ const dbModule = require("../db");
 const { stmts } = dbModule;
 const {
   ingestWorkflowsForSession,
+  ingestAllWorkflows,
+  workflowsMaxMtime,
   extractRunId,
   nameFromScript,
 } = require("../lib/workflow-ingest");
@@ -287,5 +289,30 @@ describe("running detection → completed transition", () => {
     const done = stmts.getWorkflow.get("wf_run999");
     assert.equal(done.status, "completed");
     assert.equal(done.started_at, launchTime, "launch time preserved across transition");
+  });
+});
+
+describe("workflowsMaxMtime", () => {
+  it("returns the newest artifact mtime for a session with workflows, 0 otherwise", () => {
+    assert.ok(workflowsMaxMtime(transcriptPath) > 0, "fingerprint > 0 when journals exist");
+    assert.equal(
+      workflowsMaxMtime(path.join(ROOT, "no-such-session.jsonl")),
+      0,
+      "0 when there are no workflow artifacts"
+    );
+  });
+});
+
+describe("ingestAllWorkflows backfill", () => {
+  it("ingests on-disk workflows for sessions whose transcript_path is in the DB", async () => {
+    // Backfill resolves the transcript from the session row, so persist it.
+    dbModule.db
+      .prepare("UPDATE sessions SET transcript_path = ? WHERE id = ?")
+      .run(transcriptPath, SESSION_ID);
+    const res = await ingestAllWorkflows(dbModule);
+    assert.ok(res.sessions >= 1, "at least one session backfilled");
+    assert.ok(res.workflows >= 1, "at least one workflow ingested");
+    // The completed fixture run is present after backfill.
+    assert.ok(stmts.getWorkflow.get("wf_test123"), "fixture run present");
   });
 });

@@ -52,7 +52,7 @@ function statusClass(status: string): string {
  * the first substantial quoted string, then a de-JSON'd snippet — so the panel
  * shows a sentence instead of raw `{"angle":"…","findings":[{"claim":"…`.
  */
-function friendlyPreview(raw: unknown): string {
+export function friendlyPreview(raw: unknown): string {
   if (!raw) return "";
   const s = String(raw).trim();
   const keyed = s.match(
