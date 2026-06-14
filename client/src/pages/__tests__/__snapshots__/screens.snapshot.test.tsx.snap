@@ -7076,7 +7076,7 @@ exports[`screen snapshots > Session detail 1`] = `
               y="13"
             />
           </svg>
-          Workflow Runs
+          Dynamic Workflows
           <span
             class="text-gray-600 font-mono"
           >
@@ -10565,7 +10565,7 @@ exports[`screen snapshots > Workflows 1`] = `
               y="13"
             />
           </svg>
-          Workflow Runs
+          Dynamic Workflows
         </h2>
         <p
           class="text-xs text-gray-500 mt-0.5"

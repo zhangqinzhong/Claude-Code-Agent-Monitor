@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { friendlyPreview } from "../WorkflowRunsPanel";
+import { friendlyPreview, fullPreview } from "../WorkflowRunsPanel";
 
 describe("friendlyPreview", () => {
   it("returns empty for nullish/empty input", () => {
@@ -50,5 +50,22 @@ describe("friendlyPreview", () => {
   it("passes plain prose through unchanged", () => {
     const raw = "All four claims confirmed against primary sources.";
     expect(friendlyPreview(raw)).toBe("All four claims confirmed against primary sources.");
+  });
+});
+
+describe("fullPreview", () => {
+  it("pretty-prints valid JSON", () => {
+    const out = fullPreview('{"a":1,"b":{"c":2}}');
+    expect(out).toBe('{\n  "a": 1,\n  "b": {\n    "c": 2\n  }\n}');
+  });
+
+  it("returns truncated/invalid JSON verbatim", () => {
+    const raw = '{"claim":"partial value with no close';
+    expect(fullPreview(raw)).toBe(raw);
+  });
+
+  it("returns empty for nullish input", () => {
+    expect(fullPreview(null)).toBe("");
+    expect(fullPreview(undefined)).toBe("");
   });
 });
