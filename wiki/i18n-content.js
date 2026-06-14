@@ -1159,6 +1159,10 @@ window.__WIKI_CONTENT_I18N = {
     Architecture: "架构",
     "Relevant Links": "相关链接",
     "GitHub Repo": "GitHub 仓库",
+    '<span class="caption-icon">🔔</span> <span><strong>Settings · Alerts</strong> — rules-based alerting engine and outbound webhooks in one place: alert rules (event pattern / inactivity / stuck agent / token threshold) with per-rule cooldown, a live fired-alert feed, and 14 first-class webhook providers plus a generic JSON endpoint with optional HMAC signing</span>':
+      '<span class="caption-icon">🔔</span> <span><strong>设置 · 告警</strong> — 集于一处的基于规则的告警引擎与出站 Webhook：告警规则（事件模式 / 不活动 / agent 卡住 / token 阈值）支持按规则冷却、实时的已触发告警流，以及 14 个一等公民 Webhook 提供方加一个支持可选 HMAC 签名的通用 JSON 端点</span>',
+    '<span class="caption-icon">🔔</span> Settings · Alerts — the rules-based alerting engine, a live fired-alert feed, and outbound webhook channels (14 first-class providers + a generic JSON endpoint) managed together in one place':
+      '<span class="caption-icon">🔔</span> 设置 · 告警 — 基于规则的告警引擎、实时的已触发告警流，以及出站 Webhook 通道（14 个一等公民提供方 + 一个通用 JSON 端点）集中管理于一处',
   },
   vi: {
     '<span class="caption-icon">📡</span> Live dashboard — real-time agent cards, stats, and activity feed':
@@ -2348,6 +2352,10 @@ window.__WIKI_CONTENT_I18N = {
     Architecture: "Kiến trúc",
     "Relevant Links": "Liên kết liên quan",
     "GitHub Repo": "Kho GitHub",
+    '<span class="caption-icon">🔔</span> <span><strong>Settings · Alerts</strong> — rules-based alerting engine and outbound webhooks in one place: alert rules (event pattern / inactivity / stuck agent / token threshold) with per-rule cooldown, a live fired-alert feed, and 14 first-class webhook providers plus a generic JSON endpoint with optional HMAC signing</span>':
+      '<span class="caption-icon">🔔</span> <span><strong>Cài đặt · Cảnh báo</strong> — công cụ cảnh báo theo quy tắc và webhook gửi đi trong cùng một nơi: quy tắc cảnh báo (mẫu sự kiện / không hoạt động / agent bị treo / ngưỡng token) với cooldown theo từng quy tắc, nguồn cấp cảnh báo đã kích hoạt theo thời gian thực, và 14 nhà cung cấp webhook hạng nhất cùng một endpoint JSON tổng quát có tùy chọn ký HMAC</span>',
+    '<span class="caption-icon">🔔</span> Settings · Alerts — the rules-based alerting engine, a live fired-alert feed, and outbound webhook channels (14 first-class providers + a generic JSON endpoint) managed together in one place':
+      '<span class="caption-icon">🔔</span> Cài đặt · Cảnh báo — công cụ cảnh báo theo quy tắc, nguồn cấp cảnh báo đã kích hoạt theo thời gian thực, và các kênh webhook gửi đi (14 nhà cung cấp hạng nhất + một endpoint JSON tổng quát) được quản lý cùng một nơi',
   },
   plain: {
     zh: {

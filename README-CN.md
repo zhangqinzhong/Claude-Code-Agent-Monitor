@@ -243,6 +243,12 @@ flowchart LR
   <em>⚙️ <strong>设置</strong> — 模型定价规则、Hook 安装状态、数据管理、通知偏好与系统信息</em>
 </p>
 
+<p align="center">
+  <img src="images/alerts.png" alt="设置 — 告警与 Webhook" width="100%">
+  <br>
+  <em>🔔 <strong>设置 · 告警</strong> — 基于规则的告警引擎与出站 Webhook 集于一处：告警规则（事件模式 / 不活动 / agent 卡住 / token 阈值）支持按规则冷却，实时的已触发告警流，以及 14 个一等公民 Webhook 提供方（Slack、Discord、Teams、Google Chat、Mattermost、Rocket.Chat、Telegram、PagerDuty、Opsgenie、Splunk On-Call、Zapier、Make、n8n、Pipedream）加一个支持可选 HMAC 签名的通用 JSON 端点</em>
+</p>
+
 侧边栏提供快速访问 Dashboard、看板、会话列表、活动流、分析、工作流和设置。每个页面旨在通过实时更新和丰富的可视化，为你提供对 Claude Code Agent 活动的深度洞察。
 
 ---
