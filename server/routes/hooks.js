@@ -10,6 +10,7 @@ const { stmts, db } = dbModule;
 const { broadcast } = require("../websocket");
 const TranscriptCache = require("../lib/transcript-cache");
 const { scanAndImportSubagents } = require("../../scripts/import-history");
+const { evaluateEvent } = require("../lib/alerts");
 
 const router = Router();
 
@@ -744,6 +745,15 @@ router.post("/event", (req, res) => {
   }
 
   res.json({ ok: true, event: result });
+
+  // Evaluate event-driven alert rules after the ingest transaction committed
+  // and the response is on its way — alerting must never slow down or fail
+  // hook ingestion (evaluateEvent itself is also internally fail-safe).
+  try {
+    evaluateEvent(result);
+  } catch {
+    /* non-fatal */
+  }
 
   // After SubagentStop, scan the session's subagent JSONL files and ingest any
   // tool calls that aren't yet in the events table. Subagent tool_use blocks

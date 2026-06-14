@@ -1751,6 +1751,50 @@ hr {
   border-color: var(--accent);
 }
 
+/* ─── Language switch ───────────────────────────────────────────────────── */
+.lang-switch {
+  display: flex;
+  gap: 4px;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.lang-btn {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+.lang-btn:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+.lang-btn.active {
+  color: #a5b4fc;
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+body.sidebar-collapsed .sidebar .lang-switch {
+  display: none;
+}
+
+/* ─── Sidebar search: empty state ───────────────────────────────────────── */
+.nav-empty {
+  display: none;
+  padding: 16px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
 /* ─── Footer ────────────────────────────────────────────────────────────── */
 .wiki-footer {
   margin-top: 80px;

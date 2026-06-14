@@ -445,7 +445,7 @@ graph LR
 
 **Before submitting:**
 
-1. Run tests: `npm test`
+1. Run tests: `npm test` (server `node --test` + client Vitest, including per-screen render snapshots — regenerate intentional UI changes with `cd client && npx vitest run -u`)
 2. Check formatting: `npm run format:check`
 3. Build: `npm run build`
 4. Update docs if needed

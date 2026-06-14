@@ -797,6 +797,10 @@ client/src/
 │   ├── SessionCard.test.tsx
 │   └── EventTimeline.test.tsx
 │
+├── pages/__tests__/
+│   ├── screens.snapshot.test.tsx          # render snapshots for every screen
+│   └── __snapshots__/                      # committed .snap baselines
+│
 └── lib/__tests__/
     ├── format.test.ts
     ├── eventBus.test.ts
@@ -839,6 +843,34 @@ test('renders session title and cost', () => {
   expect(screen.getByText('$1.23')).toBeInTheDocument();
 });
 ```
+
+### Snapshot Testing
+
+`pages/__tests__/screens.snapshot.test.tsx` renders **every routed screen**
+(Dashboard, Kanban, Sessions, Session detail, Activity feed, Analytics,
+Workflows, Claude Config, Run, Settings, Not found) and asserts each against a
+committed snapshot in `pages/__tests__/__snapshots__/`. These are structural
+regression guards — they catch unintended changes to layout, markup, or
+localized copy.
+
+To keep snapshots **deterministic** across machines and CI, the suite:
+
+- mocks the API layer (`vi.mock("../../lib/api", …)`) to a loaded-empty state
+  (empty collections + zeroed scalars), so no live data or noisy chart DOM
+  leaks in — `importOriginal` keeps non-`api` exports real;
+- stubs `eventBus`, push notifications, and the jsdom-missing
+  `ResizeObserver` / `IntersectionObserver` / `matchMedia` / `scroll*` APIs;
+- pins the clock (`vi.useFakeTimers`) and timezone (`TZ=UTC`) so any rendered
+  timestamps are stable.
+
+When you change a screen **intentionally**, review the diff and regenerate the
+baselines:
+
+```bash
+cd client && npx vitest run -u src/pages/__tests__/screens.snapshot.test.tsx
+```
+
+Commit the updated `.snap` file alongside the change.
 
 ---
 

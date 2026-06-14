@@ -69,6 +69,15 @@ function createOpenApiSpec() {
         description:
           "Detect upstream git changes so users can pull and restart manually (local dashboard installs)",
       },
+      {
+        name: "Alerts",
+        description: "Rules-based alerting: rule CRUD, fired-alert feed, acknowledgement",
+      },
+      {
+        name: "Webhooks",
+        description:
+          "Universal webhook delivery for fired alerts: target CRUD (Slack/Discord/Teams/generic), test probe, and delivery log. Secrets are never returned.",
+      },
       { name: "Documentation", description: "OpenAPI/Swagger endpoints" },
     ],
     components: {
@@ -2260,6 +2269,433 @@ function createOpenApiSpec() {
                 "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
               },
             },
+          },
+        },
+      },
+      "/api/alerts": {
+        get: {
+          tags: ["Alerts"],
+          summary: "List fired alerts, newest first",
+          operationId: "listAlerts",
+          parameters: [
+            { $ref: "#/components/parameters/LimitQuery" },
+            { $ref: "#/components/parameters/OffsetQuery" },
+            {
+              name: "unacked",
+              in: "query",
+              required: false,
+              schema: { type: "boolean" },
+              description: "When true, return only unacknowledged alerts",
+            },
+          ],
+          responses: {
+            200: {
+              description: "Paginated alert feed with total and unacked counts",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    additionalProperties: true,
+                    description: "Includes alerts[], total, unacked, limit, offset.",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/alerts/rules": {
+        get: {
+          tags: ["Alerts"],
+          summary: "List alert rules",
+          operationId: "listAlertRules",
+          responses: {
+            200: {
+              description: "All alert rules with parsed config objects",
+              content: {
+                "application/json": {
+                  schema: { type: "object", additionalProperties: true },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          tags: ["Alerts"],
+          summary: "Create an alert rule",
+          operationId: "createAlertRule",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["name", "rule_type", "config"],
+                  properties: {
+                    name: { type: "string" },
+                    rule_type: {
+                      type: "string",
+                      enum: ["event_pattern", "inactivity", "status_duration", "token_threshold"],
+                    },
+                    config: {
+                      type: "object",
+                      additionalProperties: true,
+                      description:
+                        "Type-specific config. event_pattern: event_type/tool_name/summary_contains + optional count/window_minutes. inactivity: minutes. status_duration: status + minutes. token_threshold: total_tokens.",
+                    },
+                    enabled: { type: "boolean", default: true },
+                    cooldown_seconds: { type: "integer", default: 300 },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            201: {
+              description: "Created rule",
+              content: {
+                "application/json": {
+                  schema: { type: "object", additionalProperties: true },
+                },
+              },
+            },
+            400: {
+              description: "Validation error",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/alerts/rules/{id}": {
+        patch: {
+          tags: ["Alerts"],
+          summary: "Update an alert rule (partial; rule_type is immutable)",
+          operationId: "updateAlertRule",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+              description: "Alert rule ID",
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    config: { type: "object", additionalProperties: true },
+                    enabled: { type: "boolean" },
+                    cooldown_seconds: { type: "integer" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: "Updated rule",
+              content: {
+                "application/json": {
+                  schema: { type: "object", additionalProperties: true },
+                },
+              },
+            },
+            400: {
+              description: "Validation error",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+            404: {
+              description: "Rule not found",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+        delete: {
+          tags: ["Alerts"],
+          summary: "Delete an alert rule and its fired-alert history",
+          operationId: "deleteAlertRule",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string" },
+              description: "Alert rule ID",
+            },
+          ],
+          responses: {
+            200: {
+              description: "Deletion confirmation",
+              content: {
+                "application/json": {
+                  schema: { type: "object", additionalProperties: true },
+                },
+              },
+            },
+            404: {
+              description: "Rule not found",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/alerts/{id}/ack": {
+        post: {
+          tags: ["Alerts"],
+          summary: "Acknowledge one fired alert",
+          operationId: "ackAlert",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "integer" },
+              description: "Alert event ID",
+            },
+          ],
+          responses: {
+            200: {
+              description: "Acknowledged alert row",
+              content: {
+                "application/json": {
+                  schema: { type: "object", additionalProperties: true },
+                },
+              },
+            },
+            404: {
+              description: "Alert not found",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } },
+              },
+            },
+          },
+        },
+      },
+      "/api/alerts/ack-all": {
+        post: {
+          tags: ["Alerts"],
+          summary: "Acknowledge all unacked alerts",
+          operationId: "ackAllAlerts",
+          responses: {
+            200: {
+              description: "Count of acknowledged alerts",
+              content: {
+                "application/json": {
+                  schema: { type: "object", additionalProperties: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/webhooks/providers": {
+        get: {
+          tags: ["Webhooks"],
+          summary: "List supported providers + their config fields (for the UI)",
+          operationId: "listWebhookProviders",
+          responses: {
+            200: {
+              description: "Provider catalog: label, family, url requirements, fields",
+              content: {
+                "application/json": { schema: { type: "object", additionalProperties: true } },
+              },
+            },
+          },
+        },
+      },
+      "/api/webhooks": {
+        get: {
+          tags: ["Webhooks"],
+          summary: "List webhook targets (URLs masked, secrets redacted)",
+          operationId: "listWebhooks",
+          responses: {
+            200: {
+              description: "All configured webhook targets",
+              content: {
+                "application/json": { schema: { type: "object", additionalProperties: true } },
+              },
+            },
+          },
+        },
+        post: {
+          tags: ["Webhooks"],
+          summary: "Create a webhook target",
+          operationId: "createWebhook",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["name", "type"],
+                  properties: {
+                    name: { type: "string" },
+                    type: {
+                      type: "string",
+                      enum: [
+                        "slack",
+                        "discord",
+                        "teams",
+                        "google_chat",
+                        "mattermost",
+                        "rocketchat",
+                        "telegram",
+                        "pagerduty",
+                        "opsgenie",
+                        "splunk_oncall",
+                        "zapier",
+                        "make",
+                        "n8n",
+                        "pipedream",
+                        "generic",
+                      ],
+                    },
+                    url: {
+                      type: "string",
+                      format: "uri",
+                      description:
+                        "Required for most providers; omit for those that derive their URL (Telegram, Opsgenie) or default it (PagerDuty). See GET /api/webhooks/providers.",
+                    },
+                    enabled: { type: "boolean", default: true },
+                    config: {
+                      type: "object",
+                      additionalProperties: true,
+                      description:
+                        "Provider-specific params, e.g. { chat_id } (Telegram), { routing_key, severity } (PagerDuty), { api_key, region } (Opsgenie).",
+                    },
+                    secret: {
+                      type: "string",
+                      description: "Generic family only: HMAC-SHA256 signing secret",
+                    },
+                    headers: {
+                      type: "object",
+                      additionalProperties: { type: "string" },
+                      description: "Generic family only: extra request headers",
+                    },
+                    rule_ids: {
+                      type: "array",
+                      items: { type: "string" },
+                      description: "Optional: scope to specific alert rules (omit for all)",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            201: {
+              description: "Created target (redacted)",
+              content: {
+                "application/json": { schema: { type: "object", additionalProperties: true } },
+              },
+            },
+            400: { description: "Validation error" },
+          },
+        },
+      },
+      "/api/webhooks/{id}": {
+        patch: {
+          tags: ["Webhooks"],
+          summary: "Update a webhook target (partial; type is immutable)",
+          operationId: "updateWebhook",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string" },
+                    url: { type: "string", format: "uri", description: "Omit to keep current" },
+                    enabled: { type: "boolean" },
+                    config: {
+                      type: "object",
+                      additionalProperties: true,
+                      description:
+                        "Provider params; merged over existing (secrets kept if omitted)",
+                    },
+                    secret: {
+                      type: ["string", "null"],
+                      description: "Generic family only: omit to keep, null to clear",
+                    },
+                    headers: { type: "object", additionalProperties: { type: "string" } },
+                    rule_ids: { type: "array", items: { type: "string" } },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            200: {
+              description: "Updated target (redacted)",
+              content: {
+                "application/json": { schema: { type: "object", additionalProperties: true } },
+              },
+            },
+            400: { description: "Validation error" },
+            404: { description: "Target not found" },
+          },
+        },
+        delete: {
+          tags: ["Webhooks"],
+          summary: "Delete a webhook target and its delivery log",
+          operationId: "deleteWebhook",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          responses: {
+            200: { description: "Deleted" },
+            404: { description: "Target not found" },
+          },
+        },
+      },
+      "/api/webhooks/{id}/test": {
+        post: {
+          tags: ["Webhooks"],
+          summary: "Send a synthetic test alert to a target",
+          operationId: "testWebhook",
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          responses: {
+            200: {
+              description: "Delivery result (ok flag carries the downstream outcome)",
+              content: {
+                "application/json": { schema: { type: "object", additionalProperties: true } },
+              },
+            },
+            404: { description: "Target not found" },
+          },
+        },
+      },
+      "/api/webhooks/{id}/deliveries": {
+        get: {
+          tags: ["Webhooks"],
+          summary: "Recent delivery log for a target",
+          operationId: "listWebhookDeliveries",
+          parameters: [
+            { name: "id", in: "path", required: true, schema: { type: "string" } },
+            { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
+            { name: "offset", in: "query", schema: { type: "integer", default: 0 } },
+          ],
+          responses: {
+            200: {
+              description: "Delivery rows, newest first",
+              content: {
+                "application/json": { schema: { type: "object", additionalProperties: true } },
+              },
+            },
+            404: { description: "Target not found" },
           },
         },
       },

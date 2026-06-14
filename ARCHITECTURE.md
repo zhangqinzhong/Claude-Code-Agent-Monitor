@@ -294,12 +294,23 @@ graph TD
     PRICING[routes/pricing.js<br/>Cost calculation + pricing CRUD]
     SETTINGS[routes/settings.js<br/>System info + data management]
     WORKFLOWS[routes/workflows.js<br/>Workflow visualizations]
+    ALERTSR[routes/alerts.js<br/>Alert rules CRUD + feed]
+    ALERTS[lib/alerts.js<br/>Rule evaluation engine]
+    WEBHOOKSR[routes/webhooks.js<br/>Webhook target CRUD + test]
+    WEBHOOKS[lib/webhooks.js<br/>Webhook delivery engine]
+    WEBHOOKPROV[lib/webhook-providers.js<br/>14-provider registry + formatters]
 
     INDEX --> DB
     INDEX --> WS
-    INDEX --> HOOKS & SESSIONS & AGENTS & EVENTS & STATS & PRICING & SETTINGS & WORKFLOWS
+    INDEX --> HOOKS & SESSIONS & AGENTS & EVENTS & STATS & PRICING & SETTINGS & WORKFLOWS & ALERTSR & WEBHOOKSR
 
     HOOKS --> DB & WS & TC
+    HOOKS --> ALERTS
+    ALERTSR --> DB & WS & ALERTS
+    ALERTS --> DB & WS
+    ALERTS --> WEBHOOKS
+    WEBHOOKSR --> DB & WEBHOOKS & WEBHOOKPROV
+    WEBHOOKS --> DB & WEBHOOKPROV
     SETTINGS --> DB & TC
     INDEX --> TC
     SESSIONS --> DB & WS
@@ -330,7 +341,12 @@ graph TD
 | `routes/stats.js`         | Single aggregate query returning total/active counts + status distributions                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `routes/analytics.js`     | Extended analytics — token totals, tool usage counts, daily event/session trends, agent type distribution. The client-side analytics heatmap grid is aligned to a Sunday start for correct day-of-week positioning                                                                                                                                                                                                                                                                                                                   |
 | `routes/pricing.js`       | Model pricing CRUD (list/upsert/delete) and per-session / global cost calculation with pattern-based model matching. Cost is computed per token bucket — keyed by (model, speed, inference_geo, service_tier) — applying fast-mode premium, US data-residency (1.1x), and Batch (0.5x) modifiers, the 5m/1h cache-write split, plus server-tool surcharges (web search $10/1k; code execution estimated by container-time with the monthly free-hours allowance; web fetch free). Feature rates + modifier math live in `lib/pricing-constants.js`; usage normalization in `lib/token-usage.js` |
-| `routes/settings.js`      | System info (DB size, hook status, server uptime, transcript cache stats), data export as JSON, session cleanup (abandon stale, purge old), clear all data, reset pricing, reinstall hooks                                                                                                                                                                                                                                                                                                                                           |
+| `routes/settings.js`      | System info (DB size, hook status, server uptime, transcript cache stats), data export as JSON, session cleanup (abandon stale, purge old), clear all data (including the fired-alert feed and webhook delivery log; alert *rules* and webhook *targets* are preserved as user configuration), reset pricing, reinstall hooks                                                                                                                                                                                                                                                                                                                                           |
+| `routes/alerts.js`        | HTTP surface for the rules-based alerting engine: alert-rule CRUD (`GET/POST /api/alerts/rules`, `PATCH/DELETE /api/alerts/rules/:id` — rule_type is immutable after creation, config re-validated against the stored type on PATCH), the fired-alert feed (`GET /api/alerts` with `?unacked=true` + pagination, response carries `total` and `unacked` counts), and acknowledgement (`POST /api/alerts/:id/ack`, `POST /api/alerts/ack-all`, broadcasting `alert_updated`). Every rule mutation calls `invalidateRuleCache()` so the evaluation engine picks up changes immediately |
+| `lib/alerts.js`           | Rule evaluation engine for the alerting feature. Four rule types: `event_pattern` (match `event_type` / `tool_name` / `summary_contains`, optionally requiring ≥ `count` matching events within `window_minutes` — counted via a dynamically built, statement-cached SQL query), `token_threshold` (session total tokens ≥ `total_tokens`, only evaluated on token-bearing events: PostToolUse / Stop / SubagentStop / SessionEnd), `inactivity` (active session whose `updated_at` — bumped on every ingested event — is older than `minutes`), and `status_duration` (agent stuck in `working`/`waiting` with no activity for `minutes`, joined against active sessions). Event-driven types run via `evaluateEvent()` called from `routes/hooks.js` **after** the ingest transaction commits and the HTTP response is sent — alerting can never slow down or fail hook ingestion, and `evaluateEvent` is itself fully try/catch-guarded per rule. Time-based types run via `sweepTimeRules()` on a 60 s unref'd interval (same pattern as the hooks watchdog). `fireAlert()` applies per-(rule, session, agent) cooldown dedup (`cooldown_seconds`, default 300) by checking the most recent `alert_events` row for the scope, then persists and broadcasts `alert_triggered`. Enabled rules are cached in memory (hook ingest is hot) and invalidated on every CRUD mutation. `validateRuleConfig()` normalizes + validates type-specific config and is shared with the routes. After persisting and broadcasting a fired alert, `fireAlert()` hands it to `lib/webhooks.js` `dispatchAlert()` fire-and-forget (lazy-required to keep the module graph acyclic) — webhook delivery never blocks or fails alert firing |
+| `routes/webhooks.js`      | HTTP surface for universal webhook targets: target CRUD (`GET/POST /api/webhooks`, `PATCH/DELETE /api/webhooks/:id` — `type` is immutable after creation), a redacted provider catalog (`GET /api/webhooks/providers`, drives the UI form), a synchronous test probe (`POST /api/webhooks/:id/test` — always 200, the `ok` flag carries the downstream delivery result), and a per-target delivery log (`GET /api/webhooks/:id/deliveries`). Validation is registry-driven: required URL (per provider), per-provider config fields, https enforcement, generic-family secret/headers. **Security**: target URLs are masked (host + last 4 chars) and secret config fields + custom-header values are redacted in every response — full URLs, signing secrets, and credentials (routing keys, api keys, bot tokens) are stored server-side and never leave the server. PATCH uses "set-flag" semantics (omit `url`/`secret`/`headers`/`config` to leave unchanged); `config` is merged over the existing config so one field can change without re-sending secrets. Every mutation calls `invalidateWebhookCache()` |
+| `lib/webhook-providers.js`| Declarative registry of the 14 first-class providers (+ generic). Each entry declares a `family` (`chat` / `api` / `generic`), a payload `format`ter, URL resolution (`urlFrom(config)` for Telegram/Opsgenie that derive the endpoint, `defaultUrl` for PagerDuty, or a user-supplied URL), optional `authFrom(config)` headers (Opsgenie GenieKey), and the credential `fields` the UI renders + the route validates. Formatters emit each platform's native body: Slack Block Kit, Discord embed, Teams Adaptive Card wrapped in the Power Automate Workflows `{ type: "message", attachments: [...] }` envelope (the legacy O365-connector MessageCard transport was retired May 2026), Google Chat text, Mattermost/Rocket.Chat Slack-style attachments, Telegram sendMessage (HTML), PagerDuty Events API v2 (with `dedup_key`), Opsgenie Alert API, Splunk On-Call/VictorOps, and the generic `{ event, alert }` envelope. A provider may also declare `verifyResponse(body)` to veto a 2xx that actually signals failure (Splunk On-Call returns 200 with `result:"failure"`). `publicProviders()` returns the redacted catalog. Adding a provider = one registry entry + a formatter — no route or delivery changes |
+| `lib/webhooks.js`         | Universal webhook delivery engine driven by the provider registry. `buildRequest()` resolves the URL, formats the provider-native payload, and assembles headers (provider auth headers + generic-family custom headers + optional HMAC-SHA256 signature via `X-Webhook-Signature` / `X-Webhook-Timestamp`). `dispatchAlert()` fans a fired alert out to every enabled, in-scope target (optional per-rule scoping via `rule_ids`); each `deliver()` POSTs with an `AbortController` timeout and bounded retry/backoff (retries transport errors / 429 / 5xx, never other 4xx) and records the attempt-chain outcome in `webhook_deliveries` (pruned to the newest 2000 rows). Delivery is detached and fully fail-safe — it never throws into the alert path. Enabled targets are cached like alert rules; tunables (`WEBHOOK_TIMEOUT_MS`, `WEBHOOK_MAX_ATTEMPTS`, `WEBHOOK_RETRY_BASE_MS`) are env-overridable. `sendTest()` awaits a synthetic delivery for the test endpoint |
 | `routes/workflows.js`     | Aggregate workflow visualization data (agent orchestration graphs, tool transition flows, collaboration networks, workflow pattern detection, model delegation, error propagation, concurrency timelines, session complexity metrics, compaction impact). Accepts `?status=active\|completed` query parameter to filter all data by session status. Per-session drill-in endpoint with agent tree, tool timeline, and event details |
 | `lib/transcript-cache.js` | Stat-based JSONL transcript cache with incremental byte-offset reads. Shared between `hooks.js` (token extraction on every event) and the periodic compaction scanner (`index.js`). Extracts tokens, compaction entries, API errors (`isApiErrorMessage` + raw error responses), turn durations (`system` subtype `turn_duration`), thinking block counts, and usage extras (service_tier, speed, inference_geo). Uses `(path, mtime, size)` cache key — unchanged files return cached results instantly, grown files only parse new bytes, shrunk files (compaction) trigger full re-read. Each cache entry stores **only** `{mtimeMs, size, bytesRead, result}` — the previous shape that duplicated every growable array at both the top level and inside `result` is gone, halving steady-state memory per entry. Per-entry growable arrays (`turnDurations`, `errors`, `compaction.entries`, `usageExtras.*`) are bounded to `TRANSCRIPT_CACHE_MAX_ARRAY_LEN` (default `1000`, tail-kept) — older items remain in the `events` table thanks to hook dedup, so the cap only affects the in-memory view. Trimming runs both during parse (when an array reaches `2 * MAX_ARRAY_LEN`, amortized O(N)) and at finalize, so even a fresh full-file parse on a multi-day session cannot accumulate an unbounded transient before returning. **Chunked sync byte-stream reader** (`_streamRange`, 4 MiB chunks split on `0x0A` bytes — safe across UTF-8 multibyte sequences — with a growable per-line byte buffer capped at 64 MiB) replaces the previous `readFileSync("utf8")` so transcripts larger than V8's max JS string length (~512 MiB on 64-bit Node 20) parse without aborting Node with `FATAL ERROR: v8::ToLocalChecked Empty MaybeLocal`. Both full and incremental reads share the same line-level state machine (`_initParseState` / `_consumeLine` / `_finalizeState`). LRU eviction caps at 200 entries. Entries evicted on SessionEnd and abandoned session cleanup |
 | `scripts/import-history.js` | Batch history importer used by (a) server startup auto-import, (b) the `/api/import/*` routes, (c) the `import-history` CLI, and (d) live `SubagentStop` ingestion via the exported `scanAndImportSubagents(dbModule, sessionId, transcriptPath)`. Exposes `importAllSessions(dbModule)` for the default `~/.claude/projects` tree and the generalized `importFromDirectory(dbModule, rootDir, {onProgress})` which walks any directory recursively, classifies each `.jsonl` as session vs subagent (with `findSessionSubagents` probing both `<proj>/<sid>/subagents/*` and `<proj>/subagents/<sid>/*` layouts), and funnels everything through the shared `parseSessionFile` + `importSession` pipeline. `parseSubagentFile` extracts ordered `toolEvents` (tool_use + tool_result paired by `tool_use_id`) so `importSubagentFromJsonl` can emit per-tool `PreToolUse` + `PostToolUse` rows under each subagent's own `agent_id`. The importer dedups against live hook-created subagent rows via `findLiveSubagentForJsonl` (session + subagent_type + start-time within 30 s) so backfill never produces parallel `<sid>-jsonl-*` rows. **Re-import is fully incremental**: for each existing session a per-event-type high-water mark (`MAX(created_at) GROUP BY event_type`) is read up-front and only JSONL entries with `ts > cutoff[type]` are inserted for Stop / PostToolUse / TurnDuration / ToolError — so long-running sessions whose transcripts grow across multiple days continue to receive new events on every re-run instead of being blocked by the old "if zero of type X then dump all" check. `sessions.ended_at` is rolled forward to the JSONL's last activity when it surpasses the stored value, and `metadata.user_messages` / `assistant_messages` / `turn_count` are refreshed on every pass. Other idempotency keys are unchanged: `data LIKE '%"tool_use_id":"X"%'` skips any tool event already inserted, compaction agents/events dedup by uuid, API errors dedup by summary, and `baseline_*` columns preserve pre-compaction token totals. Token totals, per-model cost, compactions, subagents, tool events, API errors, and turn durations are identical to live ingestion. Creates `APIError`, `TurnDuration`, and `ToolError` event types during import; subagent tool events carry `imported: true, source: "subagent_jsonl"` in their data payload so analytics can distinguish backfilled rows when needed |
@@ -783,6 +799,61 @@ erDiagram
         TEXT auth "Auth secret"
         TEXT created_at "ISO 8601"
     }
+
+    alert_rules ||--o{ alert_events : fires
+
+    alert_rules {
+        TEXT id PK "UUID"
+        TEXT name "User-facing rule name"
+        TEXT rule_type "event_pattern|inactivity|status_duration|token_threshold"
+        TEXT config "Type-specific JSON config"
+        INTEGER enabled "1|0"
+        INTEGER cooldown_seconds "Per-scope dedup window, default 300"
+        TEXT created_at "ISO 8601"
+        TEXT updated_at "ISO 8601"
+    }
+
+    alert_events {
+        INTEGER id PK "Auto-increment"
+        TEXT rule_id FK "References alert_rules.id, ON DELETE CASCADE"
+        TEXT rule_name "Snapshot — survives rule edits"
+        TEXT rule_type "Snapshot"
+        TEXT session_id "No FK — alert history survives session cleanup"
+        TEXT agent_id "Affected agent or NULL"
+        TEXT message "Human-readable alert text"
+        TEXT details "JSON context blob"
+        TEXT triggered_at "ISO 8601"
+        TEXT acknowledged_at "ISO 8601 or NULL"
+    }
+
+    webhook_targets ||--o{ webhook_deliveries : delivers
+
+    webhook_targets {
+        TEXT id PK "UUID"
+        TEXT name "User-facing target name"
+        TEXT type "provider key — slack|discord|teams|telegram|pagerduty|… (15)"
+        TEXT url "Endpoint URL (may be '' when derived) — server-only, masked in responses"
+        INTEGER enabled "1|0"
+        TEXT secret "Generic-family HMAC-SHA256 signing secret or NULL"
+        TEXT headers "Generic-family extra request headers (JSON) or NULL"
+        TEXT rule_ids "JSON array scoping to rules, or NULL = all"
+        TEXT config "Provider params JSON (routing_key, chat_id, …); secrets redacted in responses"
+        TEXT created_at "ISO 8601"
+        TEXT updated_at "ISO 8601"
+    }
+
+    webhook_deliveries {
+        INTEGER id PK "Auto-increment"
+        TEXT target_id FK "References webhook_targets.id, ON DELETE CASCADE"
+        TEXT target_name "Snapshot"
+        TEXT target_type "Snapshot"
+        INTEGER alert_id "alert_events.id, NULL for test pings (no FK)"
+        TEXT status "success|failed"
+        INTEGER status_code "Last HTTP status or NULL"
+        INTEGER attempts "Attempt-chain length"
+        TEXT error "Failure reason or NULL"
+        TEXT created_at "ISO 8601"
+    }
 ```
 
 ### Indexes
@@ -796,6 +867,11 @@ erDiagram
 | `idx_events_created`   | events   | `created_at DESC` | Activity feed ordering         |
 | `idx_sessions_status`  | sessions | `status`          | Status filter on Sessions page and Kanban Sessions view |
 | `idx_sessions_started` | sessions | `started_at DESC` | Default sort order             |
+| `idx_alert_events_triggered` | alert_events | `triggered_at DESC` | Alert feed ordering      |
+| `idx_alert_events_rule` | alert_events | `rule_id`        | Cooldown lookup per rule       |
+| `idx_alert_events_session` | alert_events | `session_id`  | Per-session alert history      |
+| `idx_webhook_deliveries_target` | webhook_deliveries | `target_id, created_at DESC` | Per-target delivery log + last-delivery lookup |
+| `idx_webhook_deliveries_created` | webhook_deliveries | `created_at DESC` | Delivery-log pruning (newest 2000)  |
 
 ### SQLite Configuration
 
@@ -831,8 +907,9 @@ All messages are JSON with this envelope:
 
 ```typescript
 {
-  type: "session_created" | "session_updated" | "agent_created" | "agent_updated" | "new_event";
-  data: Session | Agent | DashboardEvent;
+  type: "session_created" | "session_updated" | "agent_created" | "agent_updated" | "new_event"
+      | "alert_triggered" | "alert_updated";
+  data: Session | Agent | DashboardEvent | AlertEvent;
   timestamp: string; // ISO 8601
 }
 ```

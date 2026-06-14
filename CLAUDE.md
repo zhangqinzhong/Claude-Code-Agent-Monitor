@@ -28,7 +28,7 @@
 
 ## Testing and verification policy
 - Backend changes: run `npm run test:server` before finishing.
-- Frontend changes: run `npm run test:client` when relevant.
+- Frontend changes: run `npm run test:client` when relevant. This includes per-screen render snapshots (`client/src/pages/__tests__/screens.snapshot.test.tsx`). If a UI change is intentional, review the snapshot diff and regenerate baselines with `cd client && npx vitest run -u`; never blindly update snapshots to make tests pass.
 - MCP changes: run `npm run mcp:typecheck` and `npm run mcp:build`.
 - If you cannot run a verification step, state exactly what was not run and why.
 

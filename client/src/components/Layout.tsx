@@ -39,7 +39,10 @@ export function Layout({ wsConnected }: LayoutProps) {
           width: collapsed ? "calc(100% - 4.25rem)" : "calc(100% - 15rem)",
         }}
       >
-        <div className="p-5 lg:p-6 max-w-full overflow-x-hidden">
+        {/* overflow-x-clip (not -hidden) clips horizontal overflow without
+            creating a scroll container, so descendant `position: sticky`
+            elements (e.g. the Settings page TOC) still pin to the window. */}
+        <div className="p-5 lg:p-6 max-w-full overflow-x-clip">
           <Outlet />
         </div>
       </main>
