@@ -778,11 +778,13 @@ document.querySelectorAll(".diagram-toggle").forEach((toggle) => {
 })();
 
 /* ─── Wiki i18n (en source in DOM; zh / vi swap by English-text key) ──────────
- * The wiki is a static page, so localization swaps the text of the scannable
- * layer — navigation, section labels, all headings, the hero, and UI chrome.
- * Deep body prose, tables, code, paths, and commands intentionally stay in
- * English (translating them is neither useful nor safe). Anything without a
- * dictionary entry falls back to its original English text.
+ * The wiki is a static page, so localization swaps text in place. The scannable
+ * layer (nav, section labels, headings, hero, UI chrome) is keyed by plain text
+ * in T below; body content (paragraphs, list items, table cells, image
+ * captions, callout titles) is keyed by whitespace-normalized innerHTML in H
+ * (loaded from i18n-content.js) so inline <code>/<strong>/<a> markup is
+ * preserved. Code, commands, paths, and technical identifiers stay in English.
+ * Anything without a dictionary entry falls back to its original English.
  * ──────────────────────────────────────────────────────────────────────────*/
 (function () {
   const T = {
@@ -1218,6 +1220,35 @@ document.querySelectorAll(".diagram-toggle").forEach((toggle) => {
     if (node && node.nodeType === 3 && a.dataset.en == null) a.dataset.en = node.nodeValue;
   });
 
+  // Body-content translations: paragraphs, list items, table cells, image
+  // captions, and callout titles. These may carry inline markup, so we swap the
+  // whole innerHTML keyed by its whitespace-normalized English. The English
+  // source for each element is cached in a Map so re-applying a language always
+  // translates from English (idempotent). Data ships in i18n-content.js.
+  const CONTENT = (typeof window !== "undefined" && window.__WIKI_CONTENT_I18N) || {};
+  const H = { zh: CONTENT.zh || {}, vi: CONTENT.vi || {} };
+  const trH = (lang, en) => (lang === "en" ? en : (H[lang] && H[lang][norm(en)]) || en);
+  // Heading / section-label translations from the content bundle fill any gaps
+  // in T. Existing T entries always win, so this never regresses the scannable
+  // layer — it only adds headings T didn't already cover.
+  if (CONTENT.plain) {
+    ["zh", "vi"].forEach((lng) => {
+      const src = CONTENT.plain[lng] || {};
+      for (const k in src) if (!(k in T[lng])) T[lng][k] = src[k];
+    });
+  }
+  const HTML_SEL = [
+    ".main-content p:not(.hero-desc)",
+    ".main-content li",
+    ".main-content td",
+    ".main-content th",
+    ".main-content .screenshot-caption",
+    ".main-content .callout-body > strong",
+  ].join(", ");
+  const htmlEls = Array.from(document.querySelectorAll(HTML_SEL));
+  const enHtml = new Map();
+  htmlEls.forEach((el) => enHtml.set(el, el.innerHTML));
+
   function apply(lang) {
     document.querySelectorAll(PLAIN).forEach((el) => {
       if (el.children.length || el.dataset.en == null) return;
@@ -1232,6 +1263,11 @@ document.querySelectorAll(".diagram-toggle").forEach((toggle) => {
         const trail = raw.match(/\s*$/)[0];
         node.nodeValue = lead + tr(lang, raw) + trail;
       }
+    });
+    // Body content: restore/translate the whole innerHTML from the English cache.
+    htmlEls.forEach((el) => {
+      const en = enHtml.get(el);
+      if (en != null) el.innerHTML = trH(lang, en);
     });
     const search = document.getElementById("sidebar-search");
     if (search) search.placeholder = tr(lang, "Search docs...");
