@@ -36,6 +36,29 @@ function writeJson(p, obj) {
   fs.writeFileSync(p, JSON.stringify(obj));
 }
 
+// A minimal subagent transcript with token usage + one tool call.
+function agentJsonl(model, input, output) {
+  return [
+    { type: "user", timestamp: "2026-02-01T00:00:00.000Z", message: { content: "go" } },
+    {
+      type: "assistant",
+      timestamp: "2026-02-01T00:00:02.000Z",
+      message: {
+        model,
+        content: [{ type: "tool_use", id: "t1", name: "WebSearch", input: {} }],
+        usage: {
+          input_tokens: input,
+          output_tokens: output,
+          cache_read_input_tokens: 0,
+          cache_creation_input_tokens: 0,
+        },
+      },
+    },
+  ]
+    .map((l) => JSON.stringify(l))
+    .join("\n");
+}
+
 function subagentDir() {
   return path.join(ROOT, SESSION_ID, "subagents");
 }
@@ -300,6 +323,55 @@ describe("workflowsMaxMtime", () => {
       0,
       "0 when there are no workflow artifacts"
     );
+  });
+});
+
+describe("live running workflow (no terminal journal)", () => {
+  it("builds real-time progress + tokens from the streaming run dir", async () => {
+    const runId = "wf_live77";
+    const runDir = path.join(ROOT, SESSION_ID, "subagents", "workflows", runId);
+    fs.mkdirSync(runDir, { recursive: true });
+    // a1 finished (has a result event), a2 still running (started only)
+    fs.writeFileSync(path.join(runDir, "agent-a1.jsonl"), agentJsonl("claude-opus-4-8", 3000, 800));
+    fs.writeFileSync(path.join(runDir, "agent-a2.jsonl"), agentJsonl("claude-opus-4-8", 1500, 200));
+    fs.writeFileSync(
+      path.join(runDir, "journal.jsonl"),
+      [
+        JSON.stringify({ type: "started", agentId: "a1" }),
+        JSON.stringify({ type: "started", agentId: "a2" }),
+        JSON.stringify({ type: "result", agentId: "a1", result: { ok: true, note: "done" } }),
+      ].join("\n")
+    );
+    // a launch script (no terminal journal) → name resolves from it
+    fs.mkdirSync(path.join(workflowsDir(), "scripts"), { recursive: true });
+    fs.writeFileSync(path.join(workflowsDir(), "scripts", `ds-pipeline-${runId}.js`), "// s");
+
+    await ingestWorkflowsForSession(dbModule, { id: SESSION_ID, transcript_path: transcriptPath });
+
+    const wf = stmts.getWorkflow.get(runId);
+    assert.ok(wf, "live run row created");
+    assert.equal(wf.status, "running", "shown as running before terminal journal");
+    assert.equal(wf.source, "live");
+    assert.equal(wf.name, "ds-pipeline");
+    assert.equal(wf.agent_count, 2);
+    assert.ok(wf.total_tokens > 0, "live tokens accumulated");
+    assert.ok(wf.total_tool_calls >= 2, "live tool calls counted");
+
+    const prog = JSON.parse(wf.progress);
+    assert.equal(prog.length, 2);
+    const a1 = prog.find((p) => p.agentId === "a1");
+    const a2 = prog.find((p) => p.agentId === "a2");
+    assert.equal(a1.state, "done", "a1 has a result → done");
+    assert.equal(a2.state, "running", "a2 only started → running");
+    assert.ok(a1.tokens > 0 && a1.toolCalls >= 1);
+    assert.ok(a1.resultPreview, "finished agent carries its result");
+
+    // inner agents linked + live workflow tokens folded under the workflow tier
+    assert.equal(stmts.listAgentsByWorkflow.all(runId).length, 2);
+    const liveTier = dbModule.db
+      .prepare("SELECT COUNT(*) AS n FROM token_usage WHERE session_id = ? AND service_tier = ?")
+      .get(SESSION_ID, "workflow");
+    assert.ok(liveTier.n >= 1, "workflow-tier cost row written for the live run");
   });
 });
 

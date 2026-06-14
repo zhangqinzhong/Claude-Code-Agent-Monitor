@@ -164,7 +164,13 @@ function resolveTranscriptPath(session) {
  *             journals: string[], scripts: string[] }}
  */
 function findSessionWorkflows(transcriptPath) {
-  const empty = { sessionDir: null, workflowsDir: null, journals: [], scripts: [] };
+  const empty = {
+    sessionDir: null,
+    workflowsDir: null,
+    journals: [],
+    scripts: [],
+    liveRuns: [],
+  };
   if (!transcriptPath) return empty;
   const dir = path.dirname(transcriptPath);
   const sessionId = path.basename(transcriptPath, ".jsonl");
@@ -188,7 +194,23 @@ function findSessionWorkflows(transcriptPath) {
   } catch {
     /* non-fatal — partial dir during a live run */
   }
-  return { sessionDir, workflowsDir, journals, scripts };
+
+  // Live per-run dirs: <sessionDir>/subagents/workflows/<runId>/ — present while
+  // a workflow is still running (journal.jsonl + growing agent-*.jsonl), before
+  // the terminal wf_<runId>.json journal is written.
+  const liveRuns = [];
+  try {
+    const base = path.join(sessionDir, "subagents", "workflows");
+    if (fs.existsSync(base)) {
+      for (const d of fs.readdirSync(base, { withFileTypes: true })) {
+        if (d.isDirectory()) liveRuns.push({ runId: d.name, dir: path.join(base, d.name) });
+      }
+    }
+  } catch {
+    /* non-fatal */
+  }
+
+  return { sessionDir, workflowsDir, journals, scripts, liveRuns };
 }
 
 /**
@@ -350,18 +372,219 @@ async function ingestWorkflowJournal(dbModule, sessionId, journal, opts = {}) {
   return { row: stmts.getWorkflow.get(journal.runId), tokens: runTokens };
 }
 
+function shortLabel(s) {
+  if (!s) return null;
+  const first = String(s).split("\n")[0].trim();
+  return first.length > 80 ? first.slice(0, 79) + "…" : first;
+}
+
+function safeStringify(v) {
+  if (v == null) return null;
+  if (typeof v === "string") return v;
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
+function bucketTotal(tokensByModel) {
+  let n = 0;
+  for (const b of Object.values(tokensByModel || {})) {
+    n +=
+      (b.input || 0) +
+      (b.output || 0) +
+      (b.cacheRead || 0) +
+      (b.cacheWrite || 0) +
+      (b.cacheWrite1h || 0);
+  }
+  return n;
+}
+
+/**
+ * Live ingest for a RUNNING workflow — before its terminal wf_<runId>.json
+ * exists. Builds progress[] + aggregates in real time from the streaming
+ * `<runDir>/journal.jsonl` (started/result events per agent) plus the growing
+ * `<runDir>/agent-<id>.jsonl` transcripts (real token/tool/duration usage via
+ * parseSubagentFile). Phase/label aren't available live (those come from the
+ * terminal journal), so phaseTitle is null and label falls back to the agent's
+ * prompt. The fast poll re-runs this as the files grow, so tokens/tools/agents
+ * update live. Returns { row, tokens } or null.
+ */
+async function ingestLiveWorkflow(dbModule, sessionId, sessionDir, runId, scriptPath) {
+  const { stmts } = dbModule;
+  const mainAgentId = `${sessionId}-main`;
+  const ih = importHistory();
+  const dir = agentsDirForRun(sessionDir, runId);
+  if (!fs.existsSync(dir)) return null;
+
+  // Streaming journal: which agents started / finished (+ their result payload).
+  const started = new Set();
+  const doneResults = new Map();
+  try {
+    const jj = path.join(dir, "journal.jsonl");
+    if (fs.existsSync(jj)) {
+      for (const line of fs.readFileSync(jj, "utf8").split("\n")) {
+        if (!line.trim()) continue;
+        let o;
+        try {
+          o = JSON.parse(line);
+        } catch {
+          continue;
+        }
+        if (!o || !o.agentId) continue;
+        if (o.type === "started") started.add(o.agentId);
+        else if (o.type === "result") doneResults.set(o.agentId, o.result);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+
+  let agentFiles = [];
+  try {
+    agentFiles = fs.readdirSync(dir).filter((f) => f.startsWith("agent-") && f.endsWith(".jsonl"));
+  } catch {
+    return null;
+  }
+  if (agentFiles.length === 0 && started.size === 0) return null;
+
+  const progress = [];
+  const runTokens = {};
+  let totalTokens = 0;
+  let totalToolCalls = 0;
+  let earliest = null;
+  let latest = null;
+  let model = null;
+
+  for (const f of agentFiles) {
+    const agentId = f.replace(/^agent-/, "").replace(/\.jsonl$/, "");
+    let parsed = null;
+    try {
+      parsed = await ih.parseSubagentFile(path.join(dir, f));
+    } catch {
+      parsed = null;
+    }
+    const done = doneResults.has(agentId);
+    const state = done ? "done" : "running";
+    const aTok = parsed ? bucketTotal(parsed.tokensByModel) : 0;
+    const tools = parsed && parsed.toolNames ? parsed.toolNames : [];
+    const startedAt = parsed && parsed.startedAt ? parsed.startedAt : null;
+    const endedAt = parsed && parsed.endedAt ? parsed.endedAt : null;
+    const durationMs = startedAt && endedAt ? Date.parse(endedAt) - Date.parse(startedAt) : null;
+    const label = parsed && parsed.task ? shortLabel(parsed.task) : null;
+    if (parsed && parsed.model && !model) model = parsed.model;
+    totalTokens += aTok;
+    totalToolCalls += tools.length;
+    if (startedAt) {
+      const ts = Date.parse(startedAt);
+      if (!earliest || ts < earliest) earliest = ts;
+    }
+    if (endedAt) {
+      const ts = Date.parse(endedAt);
+      if (!latest || ts > latest) latest = ts;
+    }
+
+    progress.push({
+      type: "workflow_agent",
+      agentId,
+      label,
+      phaseTitle: null,
+      model: parsed ? parsed.model : null,
+      state,
+      tokens: aTok,
+      toolCalls: tools.length,
+      durationMs,
+      lastToolName: tools.length ? tools[tools.length - 1] : null,
+      promptPreview: parsed ? parsed.task : null,
+      resultPreview: done ? safeStringify(doneResults.get(agentId)) : null,
+    });
+
+    try {
+      const jsonlId = `${sessionId}-jsonl-${agentId}`;
+      if (parsed) {
+        ih.importSubagentFromJsonl(dbModule, sessionId, mainAgentId, parsed);
+        mergeWorkflowTokens(runTokens, parsed.tokensByModel);
+      } else if (!stmts.getAgent.get(jsonlId)) {
+        stmts.insertAgent.run(
+          jsonlId,
+          sessionId,
+          label || `Subagent ${agentId.slice(0, 8)}`,
+          "subagent",
+          "workflow-subagent",
+          mapState(state),
+          label,
+          mainAgentId,
+          JSON.stringify({ imported: true, source: "workflow-live", workflow_run_id: runId })
+        );
+      }
+      stmts.setAgentWorkflow.run(runId, null, mapState(state), jsonlId);
+    } catch {
+      /* one bad agent must not abort the live ingest */
+    }
+  }
+
+  // Agents that have a `started` event but no transcript file yet (queued).
+  for (const agentId of started) {
+    if (agentFiles.includes(`agent-${agentId}.jsonl`)) continue;
+    progress.push({
+      type: "workflow_agent",
+      agentId,
+      label: null,
+      phaseTitle: null,
+      model: null,
+      state: doneResults.has(agentId) ? "done" : "running",
+      tokens: 0,
+      toolCalls: 0,
+      durationMs: null,
+      lastToolName: null,
+    });
+  }
+
+  let startedAtIso = earliest ? new Date(earliest).toISOString() : null;
+  if (!startedAtIso && scriptPath) {
+    try {
+      startedAtIso = new Date(fs.statSync(scriptPath).mtimeMs).toISOString();
+    } catch {
+      /* ignore */
+    }
+  }
+  const durationMs = earliest && latest ? latest - earliest : null;
+
+  stmts.upsertWorkflow.run(
+    runId,
+    sessionId,
+    null,
+    scriptPath ? nameFromScript(scriptPath) : runId,
+    "running",
+    model,
+    startedAtIso,
+    null,
+    durationMs,
+    progress.length,
+    totalTokens,
+    totalToolCalls,
+    null,
+    JSON.stringify(progress),
+    scriptPath || null,
+    null,
+    "live"
+  );
+  return { row: stmts.getWorkflow.get(runId), tokens: runTokens };
+}
+
 /**
  * Detect running workflows: a launch script whose journal hasn't landed yet.
  * Upsert a minimal `running` row so the UI shows it before completion. Skips
  * runs that already have a completed/error row (the journal won.) Returns the
  * upserted rows.
  */
-function detectRunningWorkflows(dbModule, sessionId, paths, journalRunIds) {
+function detectRunningWorkflows(dbModule, sessionId, paths, handledRunIds) {
   const { stmts } = dbModule;
   const changed = [];
   for (const scriptPath of paths.scripts) {
     const runId = extractRunId(scriptPath);
-    if (!runId || journalRunIds.has(runId)) continue;
+    if (!runId || handledRunIds.has(runId)) continue;
     const existing = stmts.getWorkflow.get(runId);
     if (existing && existing.status !== "running") continue; // journal already won
 
@@ -424,7 +647,9 @@ async function ingestWorkflowsForSession(dbModule, session) {
   if (!transcriptPath) return [];
 
   const paths = findSessionWorkflows(transcriptPath);
-  if (paths.journals.length === 0 && paths.scripts.length === 0) return [];
+  if (paths.journals.length === 0 && paths.scripts.length === 0 && paths.liveRuns.length === 0) {
+    return [];
+  }
 
   const changed = [];
   const journalRunIds = new Set();
@@ -453,8 +678,32 @@ async function ingestWorkflowsForSession(dbModule, session) {
     }
   }
 
+  // Live runs (no terminal journal yet): build real-time progress + tokens from
+  // the streaming journal.jsonl + growing agent transcripts.
+  const liveHandled = new Set();
+  for (const lr of paths.liveRuns) {
+    if (journalRunIds.has(lr.runId)) continue; // terminal journal is authoritative
+    try {
+      const res = await ingestLiveWorkflow(
+        dbModule,
+        sessionId,
+        paths.sessionDir,
+        lr.runId,
+        scriptByRun.get(lr.runId) || null
+      );
+      if (res && res.row) {
+        changed.push(res.row);
+        liveHandled.add(lr.runId);
+      }
+      if (res && res.tokens) mergeWorkflowTokens(workflowTokens, res.tokens);
+    } catch {
+      /* non-fatal — partial live run */
+    }
+  }
+
   try {
-    changed.push(...detectRunningWorkflows(dbModule, sessionId, paths, journalRunIds));
+    const handled = new Set([...journalRunIds, ...liveHandled]);
+    changed.push(...detectRunningWorkflows(dbModule, sessionId, paths, handled));
   } catch {
     /* non-fatal */
   }
@@ -510,16 +759,31 @@ async function ingestAllWorkflows(dbModule) {
 
 /**
  * Cheap change-fingerprint for a session's workflow artifacts: the newest mtime
- * across its journals + launch scripts (0 if none). A fast poller compares this
- * to skip re-ingesting unchanged sessions.
+ * across its journals, launch scripts, and — crucially for real-time — the
+ * streaming files of any RUNNING run (journal.jsonl + agent-*.jsonl), so the
+ * poll re-ingests as a live workflow's tokens/agents grow. Per-file statting is
+ * bounded to runs without a terminal journal; completed runs contribute only
+ * their (stable) terminal-journal mtime. Returns 0 when nothing exists.
  */
 function workflowsMaxMtime(transcriptPath) {
-  const { journals, scripts } = findSessionWorkflows(transcriptPath);
+  const { journals, scripts, liveRuns } = findSessionWorkflows(transcriptPath);
   let max = 0;
-  for (const p of [...journals, ...scripts]) {
+  const stat = (p) => {
     try {
       const m = fs.statSync(p).mtimeMs;
       if (m > max) max = m;
+    } catch {
+      /* ignore */
+    }
+  };
+  for (const p of [...journals, ...scripts]) stat(p);
+  const completed = new Set(journals.map(extractRunId));
+  for (const lr of liveRuns) {
+    if (completed.has(lr.runId)) continue; // terminal journal mtime already counted
+    try {
+      for (const f of fs.readdirSync(lr.dir)) {
+        if (f.endsWith(".jsonl")) stat(path.join(lr.dir, f));
+      }
     } catch {
       /* ignore */
     }
@@ -530,6 +794,7 @@ function workflowsMaxMtime(transcriptPath) {
 module.exports = {
   ingestWorkflowsForSession,
   ingestAllWorkflows,
+  ingestLiveWorkflow,
   workflowsMaxMtime,
   findSessionWorkflows,
   parseWorkflowJournal,

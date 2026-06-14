@@ -1271,16 +1271,24 @@ basename, so the workflow → inner-agent linkage is explicit.
 
 ### The terminal-journal constraint
 
-`wf_<runId>.json` is written **only when the workflow finishes**. A running
-workflow has only its launch `scripts/*.js` plus live-appended
-`subagents/agent-*.jsonl`. The ingester handles both:
+`wf_<runId>.json` is written **only when the workflow finishes**. While a run
+is in flight, its live state lives in a per-run dir
+`subagents/workflows/<runId>/`: a streaming `journal.jsonl` (a `started` /
+`result` event per inner agent) and the growing `agent-<id>.jsonl` transcripts.
+The ingester handles both phases:
 
-- **Completed runs** are ingested in full from the journal: a `workflows` row
-  (keyed by `run_id`) plus linked inner-agent rows.
-- **Running runs** are detected from the launch script (no journal yet) and
-  recorded as `status: running`, then **replaced by the journal record on
-  completion** (idempotent upsert by `run_id`; the launch time is preserved
-  across the transition).
+- **Completed runs** are ingested in full from the terminal journal: a
+  `workflows` row (keyed by `run_id`) plus linked inner-agent rows, with phases
+  and per-agent labels.
+- **Running runs** (no terminal journal yet) are ingested **live** by
+  `ingestLiveWorkflow`: it reads `journal.jsonl` for each agent's started/done
+  state + result, and parses the live `agent-<id>.jsonl` transcripts (via
+  `parseSubagentFile`) for real-time per-agent tokens, tool calls, duration, and
+  model. It synthesizes a `progress[]` so the UI shows live activity
+  (phase/label aren't known until the terminal journal lands). The run is
+  `status: running` and **replaced by the terminal journal on completion**
+  (idempotent upsert by `run_id`; launch time preserved). A launch script with
+  no run dir yet falls back to a minimal `running` row.
 
 ### Ingestion module and triggers
 
@@ -1307,10 +1315,12 @@ Ingestion runs from four fail-safe, off-the-response-path triggers:
 1. **Live** — `routes/hooks.js`, on `Stop` / `SubagentStop` / `SessionEnd`
    (the lifecycle hooks that bracket a workflow finishing).
 2. **Real-time poll** — `startWorkflowPoll` (`server/index.js`) scans active
-   sessions every ~12 s, skipping any whose workflow artifacts are unchanged
-   (a cheap newest-mtime fingerprint). The run journal is written at workflow
-   completion, which may not coincide with a hook, so this keeps the UI fresh
-   without waiting. Tunable via `DASHBOARD_WORKFLOW_POLL_MS` (0 disables).
+   sessions every ~12 s, skipping any whose workflow artifacts are unchanged.
+   The newest-mtime fingerprint (`workflowsMaxMtime`) includes the **live**
+   `journal.jsonl` + `agent-*.jsonl` of any in-flight run (bounded to runs
+   without a terminal journal), so the poll re-ingests as a running workflow's
+   tokens/tools/agents grow — the UI updates live without waiting for a hook or
+   completion. Tunable via `DASHBOARD_WORKFLOW_POLL_MS` (0 disables).
 3. **Periodic** — the `server/index.js` maintenance sweep, scanning active
    sessions' `workflows/` directories (flips `running` → `completed` when a
    journal lands without a subsequent hook).
