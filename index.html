@@ -65,12 +65,7 @@
       }
     </script>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="stylesheet" href="fonts/fonts.css" />
 
     <style>
       :root {
@@ -2564,8 +2559,10 @@
             <div class="value-icon">🛡️</div>
             <h3>Zero telemetry</h3>
             <p>
-              No accounts, no analytics, no third-party calls. The MCP server binds to localhost.
-              Web Push needs your explicit opt-in. What you do here stays here.
+              No accounts, no analytics, no third-party calls - even the fonts and Mermaid are
+              self-hosted, so the dashboard and docs hit zero CDNs and run fully offline. The MCP
+              server binds to localhost. Web Push needs your explicit opt-in. What you do here stays
+              here.
             </p>
           </div>
           <div class="value-card" style="--card-glow: rgba(34, 211, 238, 0.5)">
@@ -2573,7 +2570,8 @@
             <h3>Instant feedback</h3>
             <p>
               Hooks fire to the local server in milliseconds. WebSocket push updates the UI
-              before you've taken your finger off the keyboard. No polling, no spinners.
+              before you've taken your finger off the keyboard. A brief branding splash greets you
+              on load, and pulsing skeletons (never blank spinners) fill in while data streams.
             </p>
           </div>
           <div class="value-card" style="--card-glow: rgba(52, 211, 153, 0.5)">
@@ -2643,8 +2641,9 @@
             <h3>Workflows visualization</h3>
             <p>
               D3-powered orchestration DAG, tool execution Sankey, collaboration network, error
-              propagation map, concurrency timeline, complexity scatter, compaction impact - 11
-              datasets with rich i18n tooltips.
+              propagation map, concurrency timeline, complexity scatter, and a compaction-impact
+              histogram (sessions by compaction count) - 11 datasets, each with hover tooltips and
+              rich i18n.
             </p>
           </div>
           <div class="feature-card">
