@@ -613,8 +613,8 @@ const MEMORY_INDEX_RE = /^(MEMORY|INDEX)\b/i;
  * community pattern of a file-based agent memory store (a MEMORY.md index
  * plus one file per remembered fact). The latter are emitted with
  * scope "auto-memory" and carry `project` (the projects/<slug> dir name)
- * and `name` (the filename) so the UI can group + label them. These extra
- * files are read-only in the dashboard (cc-mutate only knows user/project).
+ * and `name` (the filename) so the UI can group + label them. They are
+ * mutable via cc-mutate's "auto-memory" type (create/edit/delete + backup).
  */
 function readMemory(opts = {}) {
   const sources = [

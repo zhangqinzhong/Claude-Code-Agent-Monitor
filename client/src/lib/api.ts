@@ -476,19 +476,28 @@ function requestBackupsHelper(params?: { scope?: "user" | "project"; type?: CcAr
   return request<{ items: CcBackup[] }>(`/cc-config/backups${q ? `?${q}` : ""}`);
 }
 
-export type CcArtifactType = "skills" | "agents" | "commands" | "output-styles" | "memory";
+export type CcArtifactType =
+  | "skills"
+  | "agents"
+  | "commands"
+  | "output-styles"
+  | "memory"
+  | "auto-memory";
 
 export interface CcWriteArgs {
-  scope: "user" | "project";
+  // "auto-memory" targets a per-project memory file and requires `project`.
+  scope: "user" | "project" | "auto-memory";
   type: CcArtifactType;
   name?: string;
   content: string;
+  project?: string;
 }
 
 export interface CcDeleteArgs {
-  scope: "user" | "project";
+  scope: "user" | "project" | "auto-memory";
   type: CcArtifactType;
   name?: string;
+  project?: string;
 }
 
 export interface CcMutationResult {
@@ -500,13 +509,14 @@ export interface CcMutationResult {
 }
 
 export interface CcBackup {
-  scope: "user" | "project";
+  scope: "user" | "project" | "auto-memory";
   type: CcArtifactType;
   name: string;
   backupPath: string;
   isDir: boolean;
   mtime: number;
   size: number | null;
+  project?: string; // present for scope === "auto-memory"
 }
 
 export type CcScope = "user" | "project" | "all";
