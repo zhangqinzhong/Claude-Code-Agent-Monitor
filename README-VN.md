@@ -422,6 +422,9 @@ podman run -d --name agent-monitor \
 
 Bảng điều khiển sau đó có sẵn tại `http://localhost:4820`.
 
+> [!QUAN TRỌNG]
+> **Phơi bày mạng:** Theo mặc định, máy chủ chỉ bind `127.0.0.1` (loopback) nên không truy cập được từ mạng (GHSA-gr74-4xfh-6jw9). Để mở ra LAN, đặt cả `DASHBOARD_HOST` (ví dụ `0.0.0.0`) **và** `DASHBOARD_TOKEN` — khi token được đặt, mọi yêu cầu `/api/*` cùng kết nối WebSocket đều phải xuất trình nó. Liệt kê các hostname LAN trong `DASHBOARD_ALLOWED_HOSTS` (phân tách bằng dấu phẩy). Xem `.env.example` và [`.github/SECURITY.md`](./.github/SECURITY.md) để biết chi tiết.
+
 **Gắn kết âm lượng:**
 
 | Gắn kết | Mục đích |

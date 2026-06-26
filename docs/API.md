@@ -48,11 +48,23 @@ graph LR
 
 ## Authentication
 
-Currently, the API does not require authentication. For production deployments with public access, implement:
+The server is **local-first** and is hardened to keep the dashboard off the network by default (see GHSA-gr74-4xfh-6jw9). The trust boundary is the loopback bind, layered with origin and host checks:
 
-- API keys via `Authorization` header
-- OAuth 2.0 for user-based access
-- IP whitelisting at firewall/proxy level
+- **Loopback bind by default** — the server binds `127.0.0.1`, so it is not network-reachable out of the box. Operators opt into a wider bind with `DASHBOARD_HOST` (e.g. `DASHBOARD_HOST=0.0.0.0` for LAN access), which logs a startup warning.
+- **CORS restricted to loopback origins** — cross-origin web pages cannot read API responses. Requests with no `Origin` (curl, server-to-server) still work.
+- **Host-header allowlist** — both HTTP requests and WebSocket upgrades are checked against an allowlist to block DNS-rebinding. Add extra LAN names (when you bind beyond loopback) via `DASHBOARD_ALLOWED_HOSTS` (comma-separated).
+
+For deliberate LAN exposure, set `DASHBOARD_HOST` to a non-loopback address and list the names clients use in `DASHBOARD_ALLOWED_HOSTS`.
+
+### Optional token (`DASHBOARD_TOKEN`)
+
+Authentication is **off by default** (the loopback bind is the trust boundary). When `DASHBOARD_TOKEN` is set, every `/api/*` request **and** the WebSocket must present the token. It is strongly recommended whenever you bind beyond loopback. Pass it any of these ways:
+
+- `Authorization: Bearer <token>` header
+- `x-dashboard-token: <token>` header
+- `?token=<token>` query parameter
+
+These paths stay exempt even when a token is configured: `/api/health`, `/api/openapi.json`, `/api/docs`, and `/api/hooks` (local Claude Code hook ingestion). Requests that fail the check get `401` with error code `EUNAUTHORIZED`.
 
 ```mermaid
 sequenceDiagram
@@ -61,8 +73,8 @@ sequenceDiagram
     participant Auth
     participant Resource
     
-    Client->>API: Request + API Key
-    API->>Auth: Validate Key
+    Client->>API: Request + DASHBOARD_TOKEN
+    API->>Auth: Validate token (if configured)
     Auth-->>API: Valid
     API->>Resource: Fetch Data
     Resource-->>API: Return Data
@@ -716,7 +728,7 @@ Backup paths look like `<root>/cc-config-backups/<type>/<base>.<ISO>.bak[.dir]` 
 
 ### Run Claude
 
-The `/api/run/*` namespace spawns and supervises `claude` subprocesses from the dashboard. Every route enforces a same-origin / loopback-Origin guard; browser requests must come from `localhost`, `127.0.0.1`, `::1`, or `0.0.0.0`. CLI / curl requests with no `Origin` header pass through.
+The `/api/run/*` namespace spawns and supervises `claude` subprocesses from the dashboard. Every route enforces a same-origin / loopback-Origin guard; browser requests must come from `localhost`, `127.0.0.1`, `::1`, or `0.0.0.0`. CLI / curl requests with no `Origin` header pass through. When `DASHBOARD_TOKEN` is set, a valid token is also required here (like the rest of `/api/*` — see [Authentication](#authentication)).
 
 ```http
 GET    /api/run                       List all handles + concurrency state
@@ -759,6 +771,12 @@ ws.onerror = (error) => {
 ws.onclose = () => {
   console.log('Disconnected');
 };
+```
+
+When `DASHBOARD_TOKEN` is configured, pass the token as `?token=<token>` on the `/ws` upgrade (an `x-dashboard-token` header also works):
+
+```javascript
+const ws = new WebSocket('ws://localhost:4820/ws?token=YOUR_DASHBOARD_TOKEN');
 ```
 
 ### WebSocket Lifecycle

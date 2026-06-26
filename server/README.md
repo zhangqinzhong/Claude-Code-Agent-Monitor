@@ -1228,8 +1228,13 @@ graph TB
 
 ```bash
 # Server configuration
-PORT=4820                          # Server port
+DASHBOARD_PORT=4820                # Server port
 NODE_ENV=production                # Environment mode
+
+# Network exposure & hardening (see server/lib/security.js)
+DASHBOARD_HOST=127.0.0.1           # Bind address; default loopback. Set 0.0.0.0 to widen (logs a warning)
+DASHBOARD_TOKEN=                   # Optional bearer token; when set, /api/* and the WebSocket require it (off by default)
+DASHBOARD_ALLOWED_HOSTS=           # Extra Host-header names to allow (comma-separated), e.g. for LAN access
 
 # Database
 DASHBOARD_DB_PATH=./data/dashboard.db  # SQLite database path
@@ -1290,14 +1295,37 @@ docker run -p 4820:4820 -v $(pwd)/data:/app/data agent-dashboard
 ### Server Configuration (index.js)
 
 ```javascript
-const PORT = process.env.PORT || 4820;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const PORT = parseInt(process.env.DASHBOARD_PORT || '4820', 10);
+const HOST = process.env.DASHBOARD_HOST || '127.0.0.1';
 const DB_PATH = process.env.DASHBOARD_DB_PATH || './data/dashboard.db';
 
+const { corsOptions, hostGuard, tokenGuard } = require('./lib/security');
+
 const app = express();
-app.use(cors({ origin: CORS_ORIGIN }));
+app.use(cors(corsOptions()));    // loopback-only origins
+app.use(hostGuard);              // Host-header allowlist (anti DNS-rebinding)
+app.use('/api', tokenGuard);     // optional DASHBOARD_TOKEN bearer auth
 app.use(express.json({ limit: '10mb' }));
+
+server.listen(PORT, HOST);       // binds 127.0.0.1 by default
 ```
+
+The server **binds `127.0.0.1` (loopback) by default**, so it is not
+network-reachable out of the box (CVE / advisory `GHSA-gr74-4xfh-6jw9`).
+The hardening helpers all live in [`server/lib/security.js`](lib/security.js):
+
+- **`corsOptions()`** restricts CORS to loopback origins — cross-origin pages
+  in a browser cannot read responses (no-Origin clients such as `curl` still work).
+- **`hostGuard`** enforces a Host-header allowlist on HTTP requests and WebSocket
+  upgrades, blocking DNS-rebinding attacks.
+- **`tokenGuard`** is a no-op unless `DASHBOARD_TOKEN` is set; when it is, every
+  `/api/*` request (and the WebSocket) must present the token via
+  `Authorization: Bearer <token>`, an `x-dashboard-token` header, or `?token=`.
+
+Set **`DASHBOARD_HOST`** (e.g. `0.0.0.0`) to widen the bind beyond loopback —
+this logs a startup warning and you should set **`DASHBOARD_TOKEN`** for auth
+when you do. Add extra LAN Host names that should be accepted to
+**`DASHBOARD_ALLOWED_HOSTS`** (comma-separated).
 
 ### Database Configuration (db.js)
 
@@ -1341,7 +1369,7 @@ The server is production-ready with:
 - 🗄️ **Robust Storage** - SQLite with indexes, migrations, transactions
 - 💰 **Flexible Pricing** - Custom pricing rules with pattern matching
 - 🧪 **Well Tested** - Integration tests with Node.js test runner
-- 🔒 **Secure** - Prepared statements, input validation, CORS configured
+- 🔒 **Secure** - Prepared statements, input validation, loopback bind by default, Host-header allowlist, loopback-only CORS, optional `DASHBOARD_TOKEN` auth
 - 📈 **Scalable** - Handles 1000s of sessions, 100+ concurrent clients
 
 For client documentation, see [client/README.md](../client/README.md).

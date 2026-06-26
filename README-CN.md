@@ -359,6 +359,9 @@ npm run build && npm start
 | 开发 | `http://localhost:5173` |
 | 生产 | `http://localhost:4820` |
 
+> [!NOTE]
+> 服务器默认绑定 `127.0.0.1`（开箱即用不可从网络访问 —— GHSA-gr74-4xfh-6jw9）；如需在局域网暴露，请设置 `DASHBOARD_HOST` 和 `DASHBOARD_TOKEN`（设置后 `/api/*` 与 WebSocket 都需要该 token），并在 `DASHBOARD_ALLOWED_HOSTS` 中列出局域网主机名。参见 `.env.example` / `.github/SECURITY.md`。
+
 ### 5. 可选：构建并运行本地 MCP 服务器
 
 ```bash

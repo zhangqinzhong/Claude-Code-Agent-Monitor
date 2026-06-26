@@ -865,8 +865,10 @@
             <div class="callout-body">
               <strong>Local-first by design</strong>
               <p>
-                The server binds to <code>0.0.0.0</code> but everything runs on your machine. No
-                data leaves your system. No API keys. No external services.
+                The server binds <code>127.0.0.1</code> (loopback) by default, so it is not
+                network-reachable and everything runs on your machine. No data leaves your system.
+                No API keys. No external services. Exposing it more widely is opt-in via
+                <code>DASHBOARD_HOST</code> and should be paired with <code>DASHBOARD_TOKEN</code>.
               </p>
             </div>
           </div>
@@ -5723,13 +5725,16 @@ docker run -d --name agent-monitor \
                 <tr>
                   <td>CORS</td>
                   <td>
-                    Enabled for development; in production same-origin (Express serves the client)
+                    Restricted to loopback origins, so cross-origin pages can't read responses;
+                    no-Origin clients like curl still work
                   </td>
                 </tr>
                 <tr>
                   <td>Authentication</td>
                   <td>
-                    Intentionally none — local dev tool. Restrict via firewall if exposing on LAN.
+                    Off by default since the loopback bind is the trust boundary; set
+                    <code>DASHBOARD_TOKEN</code> to require a bearer token on every
+                    <code>/api/*</code> request and the WebSocket when exposing on a LAN.
                   </td>
                 </tr>
                 <tr>
@@ -5991,8 +5996,8 @@ npm run install-hooks</code></pre>
     <!-- Body-content translations (zh/vi) — must load before script.js so the
          i18n engine sees window.__WIKI_CONTENT_I18N. Both are deferred, so they
          run in document order. -->
-    <script src="i18n-content.js?v=9" defer></script>
-    <script src="script.js?v=27" defer></script>
+    <script src="i18n-content.js?v=10" defer></script>
+    <script src="script.js?v=28" defer></script>
     <script>
       (function () {
         var carousel = document.getElementById("feature-carousel");

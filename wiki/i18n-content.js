@@ -10,8 +10,8 @@ window.__WIKI_CONTENT_I18N = {
     "End-to-end data pipeline from Claude Code to the browser":
       "从 Claude Code 到浏览器的端到端数据管道",
     "Local-first by design": "本地优先的设计理念",
-    "The server binds to <code>0.0.0.0</code> but everything runs on your machine. No data leaves your system. No API keys. No external services.":
-      "服务器绑定到 <code>0.0.0.0</code>，但一切都在你的机器上运行。没有数据离开你的系统。无需 API 密钥。无需外部服务。",
+    "The server binds <code>127.0.0.1</code> (loopback) by default, so it is not network-reachable and everything runs on your machine. No data leaves your system. No API keys. No external services. Exposing it more widely is opt-in via <code>DASHBOARD_HOST</code> and should be paired with <code>DASHBOARD_TOKEN</code>.":
+      "服务器默认绑定 <code>127.0.0.1</code>（回环地址），因此它不可通过网络访问，一切都在你的机器上运行。没有数据离开你的系统。无需 API 密钥。无需外部服务。如需更大范围地暴露，则需通过 <code>DASHBOARD_HOST</code> 主动开启，并应搭配 <code>DASHBOARD_TOKEN</code> 一起使用。",
     "Every feature is driven by real hook events — nothing is hardcoded or simulated in production mode.":
       "每项功能都由真实的 hook 事件驱动——在生产模式下没有任何内容是硬编码或模拟的。",
     "Two tabs: <strong>Monitor</strong> shows overview stats, active agent cards with collapsible subagent hierarchy, and a recent activity feed whose item count fills available viewport height. <strong>Health</strong> renders a composite system health score ring, storage engine donut chart, cache/error/success gauges, tool invocation bars, subagent effectiveness ratios, model token distribution, and compaction stats. Both tabs auto-refresh every 5 seconds via WebSocket push so the view is always current without manual reload.":
@@ -963,11 +963,11 @@ window.__WIKI_CONTENT_I18N = {
     "Hook handler always exits 0; 5s max lifetime; uses <code>127.0.0.1</code> not external hosts":
       "Hook 处理器始终以 0 退出；最长存活 5s；使用 <code>127.0.0.1</code> 而非外部主机",
     CORS: "CORS",
-    "Enabled for development; in production same-origin (Express serves the client)":
-      "在开发环境中启用；在生产环境中为同源（Express 提供客户端）",
+    "Restricted to loopback origins, so cross-origin pages can't read responses; no-Origin clients like curl still work":
+      "仅限于回环来源，因此跨源页面无法读取响应；像 curl 这样的无 Origin 客户端仍然可用",
     Authentication: "身份验证",
-    "Intentionally none — local dev tool. Restrict via firewall if exposing on LAN.":
-      "刻意不设置——本地开发工具。如需在局域网中暴露，请通过防火墙加以限制。",
+    "Off by default since the loopback bind is the trust boundary; set <code>DASHBOARD_TOKEN</code> to require a bearer token on every <code>/api/*</code> request and the WebSocket when exposing on a LAN.":
+      "默认关闭，因为回环绑定即是信任边界；在局域网中暴露时，可设置 <code>DASHBOARD_TOKEN</code>，以要求每个 <code>/api/*</code> 请求和 WebSocket 都提供 bearer 令牌。",
     Secrets: "密钥",
     "No API keys, tokens, or credentials stored or transmitted anywhere":
       "不在任何地方存储或传输 API 密钥、令牌或凭据",
@@ -1190,8 +1190,8 @@ window.__WIKI_CONTENT_I18N = {
     "End-to-end data pipeline from Claude Code to the browser":
       "Đường ống dữ liệu đầu-cuối từ Claude Code đến trình duyệt",
     "Local-first by design": "Ưu tiên cục bộ theo thiết kế",
-    "The server binds to <code>0.0.0.0</code> but everything runs on your machine. No data leaves your system. No API keys. No external services.":
-      "Máy chủ liên kết với <code>0.0.0.0</code> nhưng mọi thứ đều chạy trên máy của bạn. Không có dữ liệu nào rời khỏi hệ thống của bạn. Không cần API key. Không có dịch vụ bên ngoài.",
+    "The server binds <code>127.0.0.1</code> (loopback) by default, so it is not network-reachable and everything runs on your machine. No data leaves your system. No API keys. No external services. Exposing it more widely is opt-in via <code>DASHBOARD_HOST</code> and should be paired with <code>DASHBOARD_TOKEN</code>.":
+      "Máy chủ mặc định liên kết với <code>127.0.0.1</code> (loopback), nên nó không thể truy cập qua mạng và mọi thứ đều chạy trên máy của bạn. Không có dữ liệu nào rời khỏi hệ thống của bạn. Không cần API key. Không có dịch vụ bên ngoài. Việc để lộ rộng hơn là tùy chọn bật qua <code>DASHBOARD_HOST</code> và nên đi kèm với <code>DASHBOARD_TOKEN</code>.",
     "Every feature is driven by real hook events — nothing is hardcoded or simulated in production mode.":
       "Mọi tính năng đều được điều khiển bởi các sự kiện hook thực — không có gì bị hardcode hoặc mô phỏng ở chế độ production.",
     "Two tabs: <strong>Monitor</strong> shows overview stats, active agent cards with collapsible subagent hierarchy, and a recent activity feed whose item count fills available viewport height. <strong>Health</strong> renders a composite system health score ring, storage engine donut chart, cache/error/success gauges, tool invocation bars, subagent effectiveness ratios, model token distribution, and compaction stats. Both tabs auto-refresh every 5 seconds via WebSocket push so the view is always current without manual reload.":
@@ -2161,11 +2161,11 @@ window.__WIKI_CONTENT_I18N = {
     "Hook handler always exits 0; 5s max lifetime; uses <code>127.0.0.1</code> not external hosts":
       "Trình xử lý hook luôn thoát với mã 0; vòng đời tối đa 5s; dùng <code>127.0.0.1</code> chứ không phải các host bên ngoài",
     CORS: "CORS",
-    "Enabled for development; in production same-origin (Express serves the client)":
-      "Được bật cho môi trường phát triển; trong môi trường sản xuất là cùng nguồn (Express phục vụ client)",
+    "Restricted to loopback origins, so cross-origin pages can't read responses; no-Origin clients like curl still work":
+      "Giới hạn ở các nguồn loopback, nên các trang khác nguồn không thể đọc phản hồi; các client không có Origin như curl vẫn hoạt động",
     Authentication: "Xác thực",
-    "Intentionally none — local dev tool. Restrict via firewall if exposing on LAN.":
-      "Cố ý không có — đây là công cụ phát triển cục bộ. Hãy hạn chế bằng tường lửa nếu để lộ trên mạng LAN.",
+    "Off by default since the loopback bind is the trust boundary; set <code>DASHBOARD_TOKEN</code> to require a bearer token on every <code>/api/*</code> request and the WebSocket when exposing on a LAN.":
+      "Tắt theo mặc định vì việc liên kết loopback chính là ranh giới tin cậy; đặt <code>DASHBOARD_TOKEN</code> để yêu cầu một bearer token trên mọi yêu cầu <code>/api/*</code> và WebSocket khi để lộ trên mạng LAN.",
     Secrets: "Bí mật (secrets)",
     "No API keys, tokens, or credentials stored or transmitted anywhere":
       "Không lưu trữ hoặc truyền API key, token hay thông tin xác thực ở bất cứ đâu",

@@ -107,6 +107,11 @@ sequenceDiagram
     Note over Claude: Continues execution<br/>without waiting
 ```
 
+> **Security:** the hook handler POSTs to the loopback dashboard (`127.0.0.1:<port>`).
+> The `/api/hooks` ingestion path is **exempt** from the optional `DASHBOARD_TOKEN`
+> gate — it is a local-only write — so hooks keep working without a token even when
+> one is configured for the rest of the API (GHSA-gr74-4xfh-6jw9).
+
 ### Hook System Characteristics
 
 **Design Principles:**
