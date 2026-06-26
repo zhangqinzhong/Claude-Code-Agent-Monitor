@@ -98,12 +98,13 @@ describe("AgentCard", () => {
             cwd: "/Users/dev/proj",
             model: "claude-opus-4-8",
             agent_count: 4,
+            metadata: JSON.stringify({ turn_count: 12 }),
           } as never
         }
       />
     );
-    // Subtitle: project basename + how many agents the session spawned.
-    expect(screen.getByText("proj · 4 agents")).toBeInTheDocument();
+    // Subtitle: project basename + agent count + turn count (model excluded).
+    expect(screen.getByText("proj · 4 agents · 12 turns")).toBeInTheDocument();
     // The model appears exactly once — in the footer badge, not duplicated in
     // the subtitle the way main cards used to.
     expect(screen.getAllByText(formatModelName("claude-opus-4-8")!)).toHaveLength(1);

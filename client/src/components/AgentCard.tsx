@@ -57,12 +57,26 @@ export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
   // for main, the subagent's own model for subagents.
   const displayModel = isMain ? model : subagentModel;
   // Model now lives in the footer badge, so the subtitle carries project
-  // context instead: main shows cwd + how many agents the session spawned;
-  // subagents show their type + the project they ran in. (No model here — that
-  // would duplicate the footer badge, which is what main cards used to do.)
+  // context instead: main shows cwd + how many agents the session spawned +
+  // how many turns it has run; subagents show their type + the project they ran
+  // in. (No model here — that would duplicate the footer badge, which is what
+  // main cards used to do.)
   const agentCount = typeof session?.agent_count === "number" ? session.agent_count : 0;
+  let sessionTurns = 0;
+  if (isMain && session?.metadata) {
+    try {
+      const m = JSON.parse(session.metadata) as { turn_count?: number };
+      if (typeof m?.turn_count === "number") sessionTurns = m.turn_count;
+    } catch {
+      sessionTurns = 0;
+    }
+  }
   const subtitle = isMain
-    ? [cwdBase, agentCount > 0 ? t("kanban:session.agentSummary", { count: agentCount }) : null]
+    ? [
+        cwdBase,
+        agentCount > 0 ? t("kanban:session.agentSummary", { count: agentCount }) : null,
+        sessionTurns > 0 ? t("kanban:session.turnSummary", { count: sessionTurns }) : null,
+      ]
         .filter(Boolean)
         .join(" · ") || null
     : [label || agent.subagent_type, cwdBase].filter(Boolean).join(" · ") || null;
