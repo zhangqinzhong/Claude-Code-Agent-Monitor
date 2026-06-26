@@ -56,9 +56,16 @@ export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
   // The model badge (footer) must reflect THIS card's agent: the session model
   // for main, the subagent's own model for subagents.
   const displayModel = isMain ? model : subagentModel;
+  // Model now lives in the footer badge, so the subtitle carries project
+  // context instead: main shows cwd + how many agents the session spawned;
+  // subagents show their type + the project they ran in. (No model here — that
+  // would duplicate the footer badge, which is what main cards used to do.)
+  const agentCount = typeof session?.agent_count === "number" ? session.agent_count : 0;
   const subtitle = isMain
-    ? [model, cwdBase].filter(Boolean).join(" · ") || null
-    : label || agent.subagent_type;
+    ? [cwdBase, agentCount > 0 ? t("kanban:session.agentSummary", { count: agentCount }) : null]
+        .filter(Boolean)
+        .join(" · ") || null
+    : [label || agent.subagent_type, cwdBase].filter(Boolean).join(" · ") || null;
 
   function handleClick() {
     if (onClick) {

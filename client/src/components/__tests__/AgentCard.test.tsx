@@ -78,11 +78,35 @@ describe("AgentCard", () => {
         }
       />
     );
-    // Subtitle is the subagent type; the model badge shows the subagent's OWN model.
-    expect(screen.getByText("qa")).toBeInTheDocument();
+    // Subtitle is the subagent type + project (cwd); the model badge shows the
+    // subagent's OWN model.
+    expect(screen.getByText("qa · x")).toBeInTheDocument();
     expect(screen.getByText(formatModelName("claude-haiku-4-5-20251001")!)).toBeInTheDocument();
     // The Opus session model must NOT appear on a subagent card.
     expect(screen.queryByText(formatModelName("claude-opus-4-8")!)).not.toBeInTheDocument();
+  });
+
+  it("main agent subtitle shows project + agent count, with the model only once (#185)", () => {
+    renderCard(
+      <AgentCard
+        agent={makeAgent({ type: "main", name: "Main" })}
+        session={
+          {
+            id: "s",
+            name: "S",
+            status: "active",
+            cwd: "/Users/dev/proj",
+            model: "claude-opus-4-8",
+            agent_count: 4,
+          } as never
+        }
+      />
+    );
+    // Subtitle: project basename + how many agents the session spawned.
+    expect(screen.getByText("proj · 4 agents")).toBeInTheDocument();
+    // The model appears exactly once — in the footer badge, not duplicated in
+    // the subtitle the way main cards used to.
+    expect(screen.getAllByText(formatModelName("claude-opus-4-8")!)).toHaveLength(1);
   });
 
   it("should not render subagent_type when null", () => {
