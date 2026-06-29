@@ -1424,6 +1424,36 @@ async function backfillCompactions(dbModule) {
 }
 
 /**
+ * Parse a single session JSONL into the shape `importSession` expects, attaching
+ * any sibling `subagents/` transcripts. Returns the parsed session (with its
+ * source path stashed on `_sourceJsonlPath`) or `null` when the file holds no
+ * usable session. Shared by `importAllSessions` (batch) and `syncDefaultProjects`
+ * (incremental) so both discover sessions and subagents identically.
+ */
+async function parseSessionForImport(projPath, sourcePath) {
+  const session = await parseSessionFile(sourcePath);
+  if (!session) return null;
+
+  // Parse subagent JSONL files if session has subagents/ directory
+  const subDir = path.join(projPath, session.sessionId, "subagents");
+  if (fs.existsSync(subDir)) {
+    const subFiles = fs.readdirSync(subDir).filter((f) => f.endsWith(".jsonl"));
+    session.parsedSubagents = [];
+    for (const sf of subFiles) {
+      try {
+        const subData = await parseSubagentFile(path.join(subDir, sf));
+        if (subData) session.parsedSubagents.push(subData);
+      } catch {
+        /* non-fatal */
+      }
+    }
+  }
+
+  session._sourceJsonlPath = sourcePath;
+  return session;
+}
+
+/**
  * Auto-import all legacy sessions. Called from server startup.
  * Returns { imported, skipped, errors } counts.
  * Designed to be fast on repeat runs (skips existing sessions).
@@ -1457,28 +1487,11 @@ async function importAllSessions(dbModule) {
     for (const file of files) {
       try {
         const sourcePath = path.join(projPath, file);
-        const session = await parseSessionFile(sourcePath);
+        const session = await parseSessionForImport(projPath, sourcePath);
         if (!session) {
           skipped++;
           continue;
         }
-
-        // Parse subagent JSONL files if session has subagents/ directory
-        const subDir = path.join(projPath, session.sessionId, "subagents");
-        if (fs.existsSync(subDir)) {
-          const subFiles = fs.readdirSync(subDir).filter((f) => f.endsWith(".jsonl"));
-          session.parsedSubagents = [];
-          for (const sf of subFiles) {
-            try {
-              const subData = await parseSubagentFile(path.join(subDir, sf));
-              if (subData) session.parsedSubagents.push(subData);
-            } catch {
-              /* non-fatal */
-            }
-          }
-        }
-
-        session._sourceJsonlPath = sourcePath;
         batch.push(session);
       } catch {
         errors++;
@@ -1496,6 +1509,81 @@ async function importAllSessions(dbModule) {
   }
 
   return { imported, skipped, errors };
+}
+
+/**
+ * Incremental, change-driven sync of the default `~/.claude/projects` directory.
+ *
+ * Unlike `importAllSessions` (a one-time, parse-every-file backfill), this is
+ * meant to run repeatedly from a background poll: it stats each session JSONL
+ * one level deep and only parses + imports files whose mtime is new or has
+ * advanced since the last sweep, tracked in the caller-owned `mtimeCache`
+ * (filePath → mtime ms). This is what lets projects added *after* the one-time
+ * backfill — e.g. a folder whose sessions never flow through hooks — surface
+ * automatically without a manual rescan.
+ *
+ * Returns `{ changed }`, where `changed` is `[{ sessionId, isNew }]` for every
+ * session touched this sweep (`isNew` = the session did not yet exist in the
+ * DB). The caller broadcasts the appropriate WebSocket event per entry. Failures
+ * are non-fatal and per-file: one unreadable file never aborts the sweep.
+ */
+async function syncDefaultProjects(dbModule, options = {}) {
+  const mtimeCache = options.mtimeCache instanceof Map ? options.mtimeCache : new Map();
+  const changed = [];
+  if (!fs.existsSync(PROJECTS_DIR)) return { changed };
+
+  let projectDirs;
+  try {
+    projectDirs = fs
+      .readdirSync(PROJECTS_DIR, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name);
+  } catch {
+    return { changed };
+  }
+
+  for (const projDir of projectDirs) {
+    const projPath = path.join(PROJECTS_DIR, projDir);
+    let files;
+    try {
+      files = fs.readdirSync(projPath).filter((f) => f.endsWith(".jsonl"));
+    } catch {
+      continue;
+    }
+
+    for (const file of files) {
+      const sourcePath = path.join(projPath, file);
+      let mtime;
+      try {
+        mtime = fs.statSync(sourcePath).mtimeMs;
+      } catch {
+        continue;
+      }
+      if (mtimeCache.get(sourcePath) === mtime) continue; // unchanged since last sweep
+
+      try {
+        const sessionId = path.basename(file, ".jsonl");
+        const existed = !!dbModule.stmts.getSession.get(sessionId);
+        const session = await parseSessionForImport(projPath, sourcePath);
+        // Record the mtime even when the file yields no session, so we don't
+        // re-parse an unusable file every tick.
+        mtimeCache.set(sourcePath, mtime);
+        if (!session) continue;
+
+        const result = importSession(dbModule, session);
+        snapshotTranscript(session._sourceJsonlPath, session.sessionId);
+        // A brand-new session is always a real change. An existing one only
+        // counts when importSession actually wrote new events (not skipped).
+        if (!existed || !result.skipped) {
+          changed.push({ sessionId: session.sessionId, isNew: !existed });
+        }
+      } catch {
+        /* non-fatal — leave mtime recorded so we don't spin on a bad file */
+      }
+    }
+  }
+
+  return { changed };
 }
 
 /**
@@ -2125,6 +2213,7 @@ async function scanAndImportSubagents(dbModule, sessionId, transcriptPath, opts 
 
 module.exports = {
   importAllSessions,
+  syncDefaultProjects,
   importFromDirectory,
   backfillCompactions,
   importCompactions,

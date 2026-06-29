@@ -11,6 +11,21 @@ import { effectiveAgentStatus, isAgentAwaitingInput } from "../lib/types";
 import type { Agent, Session } from "../lib/types";
 import { formatDuration, timeAgo, formatModelName, pathBasename, fmtCost } from "../lib/format";
 
+/**
+ * Display name for a main agent, swapping its auto-generated placeholder for the
+ * real session title when one exists. Main agents are created as
+ * `<prefix> - <placeholder>`, where the placeholder is either `Session <id8>`
+ * (live hooks) or `<cwd-folder> - <id8>` (import / background sync). Replacing
+ * everything after the first ` - ` covers BOTH formats — the older
+ * `replace(/Session [0-9a-f]{8}/)` only matched the hook form, so imported
+ * sessions kept showing `<folder> - <id8>` even after their title was known.
+ */
+function mainAgentDisplayName(agentName: string, realSessionName: string): string {
+  if (!realSessionName) return agentName;
+  const sep = agentName.indexOf(" - ");
+  return sep >= 0 ? `${agentName.slice(0, sep)} - ${realSessionName}` : agentName;
+}
+
 interface AgentCardProps {
   agent: Agent;
   /** Optional session data for richer main-agent rendering (model, cwd,
@@ -111,12 +126,11 @@ export function AgentCard({ agent, session, label, onClick }: AgentCardProps) {
           </div>
           <div className="min-w-0 overflow-hidden">
             <p className="text-sm font-medium text-gray-200 truncate">
-              {/* Auto-generated titles like "Main Agent - Session 229d93fd"
-                  swap the ID part for the real session name when one exists;
-                  custom agent names are left untouched. */}
-              {isMain && realSessionName
-                ? agent.name.replace(/Session [0-9a-f]{8}/i, realSessionName)
-                : agent.name}
+              {/* Auto-generated main-agent titles (e.g. "Main Agent - Session
+                  229d93fd" or "Main Agent - work - e3f8e613") swap the
+                  placeholder for the real session name when one exists; custom
+                  (sub)agent names are left untouched. */}
+              {isMain ? mainAgentDisplayName(agent.name, realSessionName) : agent.name}
             </p>
             {subtitle && <p className="text-[11px] text-gray-500 truncate">{subtitle}</p>}
           </div>

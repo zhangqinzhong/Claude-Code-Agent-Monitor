@@ -291,6 +291,16 @@ function startBackgroundServices() {
   } catch (err) {
     console.warn("workflow poll failed to start:", err.message);
   }
+  // Continuous discovery of sessions under ~/.claude/projects. The one-time
+  // legacy backfill above runs only once (marker-gated), so a project added
+  // later whose sessions never flow through hooks would otherwise stay invisible
+  // until a manual rescan. This incremental, mtime-fingerprinted poll keeps the
+  // default folder in sync without re-parsing unchanged files.
+  try {
+    startSessionSync(broadcast);
+  } catch (err) {
+    console.warn("session sync failed to start:", err.message);
+  }
   // Flip any dashboard_runs rows the previous process left flagged
   // running/spawning — those handles died with the previous server, so
   // there's no way to attach to them anymore. Marking them abandoned
@@ -356,6 +366,153 @@ function startWorkflowPoll(broadcast) {
     }
   }, POLL_MS);
   if (timer.unref) timer.unref();
+}
+
+/**
+ * Keep the default `~/.claude/projects` directory in sync via three triggers
+ * that share one `mtimeCache` and a single coalesced sweep:
+ *
+ *   1. **Immediate** — one sweep at startup, so a project the one-time backfill
+ *      (`autoImportLegacySessions`, marker-gated) missed surfaces right away
+ *      instead of after the first interval.
+ *   2. **Watcher** — a debounced `fs.watch` on the projects tree fires a sweep
+ *      the instant a *new* session file or project folder appears, so no-hook
+ *      sessions show up immediately rather than on the next poll. Events for
+ *      files already in `mtimeCache` (active transcripts being appended to) are
+ *      ignored, so a busy session never thrashes the importer — the poll picks
+ *      up its growth. Recursive watching is used only on macOS/Windows (native,
+ *      stable); on Linux, where Node's userland recursive watcher trips on the
+ *      high-churn projects tree (see lib/cc-watcher.js), we watch the root plus
+ *      each immediate child folder non-recursively instead.
+ *   3. **Poll** — a periodic safety-net sweep (watchers can miss events / not
+ *      fire on network filesystems). Tunable via `DASHBOARD_SESSION_SYNC_MS`
+ *      (default 30 s); `0` disables the poll but leaves the watcher running.
+ *
+ * Each sweep parses only files whose mtime is new or has advanced, then
+ * broadcasts `session_created` for newly imported sessions / `session_updated`
+ * for grown ones — the same events hooks emit, so the UI refreshes live. All
+ * timers and watchers are `unref`'d and best-effort; nothing here can block
+ * shutdown or take down the server.
+ */
+function startSessionSync(broadcast) {
+  const fs = require("fs");
+  const dbModule = require("./db");
+  const { getProjectsDir } = require("./lib/claude-home");
+  const { syncDefaultProjects } = require("../scripts/import-history");
+
+  const projectsDir = getProjectsDir();
+  const mtimeCache = new Map(); // filePath → newest mtime (ms) already imported
+  let running = false;
+  let queued = false; // a trigger arrived mid-sweep → run exactly once more
+
+  function runSweep() {
+    if (running) {
+      queued = true;
+      return;
+    }
+    running = true;
+    syncDefaultProjects(dbModule, { mtimeCache })
+      .then(({ changed }) => {
+        for (const { sessionId, isNew } of changed) {
+          let row;
+          try {
+            row = dbModule.stmts.getSession.get(sessionId);
+          } catch {
+            continue;
+          }
+          if (!row) continue;
+          broadcast(isNew ? "session_created" : "session_updated", row);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        running = false;
+        if (queued) {
+          queued = false;
+          runSweep();
+        }
+      });
+  }
+
+  // 1. Immediate sweep — catch anything the one-time backfill missed, now.
+  runSweep();
+
+  // 3. Periodic safety net.
+  const POLL_MS = process.env.DASHBOARD_SESSION_SYNC_MS
+    ? Number(process.env.DASHBOARD_SESSION_SYNC_MS)
+    : 30_000;
+  if (Number.isFinite(POLL_MS) && POLL_MS > 0) {
+    const timer = setInterval(runSweep, POLL_MS);
+    if (timer.unref) timer.unref();
+  }
+
+  // 2. Filesystem watcher — debounced, ignoring known-file churn.
+  const DEBOUNCE_MS = 800;
+  let debounce = null;
+  function scheduleSweep() {
+    if (debounce) return;
+    debounce = setTimeout(() => {
+      debounce = null;
+      runSweep();
+    }, DEBOUNCE_MS);
+    if (debounce.unref) debounce.unref();
+  }
+  // Only a path we don't already track is interesting (a new session file or a
+  // new project folder). Appends to a known active transcript are left to the
+  // poll, so the watcher never re-parses a busy session every write.
+  function onFsEvent(fullPath) {
+    if (fullPath && mtimeCache.has(fullPath)) return;
+    scheduleSweep();
+  }
+
+  const watchers = [];
+  function addWatcher(w) {
+    w.on("error", () => {});
+    if (w.unref) w.unref();
+    watchers.push(w);
+  }
+  const recursiveOk = process.platform === "darwin" || process.platform === "win32";
+  try {
+    if (fs.existsSync(projectsDir)) {
+      if (recursiveOk) {
+        addWatcher(
+          fs.watch(projectsDir, { recursive: true }, (_e, filename) => {
+            onFsEvent(filename ? path.join(projectsDir, filename) : null);
+          })
+        );
+      } else {
+        // Linux: watch the root (new folders) + each immediate child folder
+        // (new session files), adding a child watcher when a folder appears.
+        const watchChild = (dir) => {
+          try {
+            addWatcher(
+              fs.watch(dir, (_e, filename) => onFsEvent(filename ? path.join(dir, filename) : null))
+            );
+          } catch {
+            /* best-effort */
+          }
+        };
+        addWatcher(
+          fs.watch(projectsDir, (_e, filename) => {
+            if (filename) {
+              const child = path.join(projectsDir, filename);
+              try {
+                if (fs.statSync(child).isDirectory()) watchChild(child);
+              } catch {
+                /* removed before we could stat — ignore */
+              }
+            }
+            onFsEvent(filename ? path.join(projectsDir, filename) : null);
+          })
+        );
+        for (const ent of fs.readdirSync(projectsDir, { withFileTypes: true })) {
+          if (ent.isDirectory()) watchChild(path.join(projectsDir, ent.name));
+        }
+      }
+    }
+  } catch {
+    /* best-effort — the poll still keeps things in sync */
+  }
 }
 
 /**
