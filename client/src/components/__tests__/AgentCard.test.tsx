@@ -110,6 +110,46 @@ describe("AgentCard", () => {
     expect(screen.getAllByText(formatModelName("claude-opus-4-8")!)).toHaveLength(1);
   });
 
+  it("swaps the real session title into the hook-style placeholder (Session <id8>)", () => {
+    renderCard(
+      <AgentCard
+        agent={makeAgent({ type: "main", name: "Main Agent - Session 329c4d24" })}
+        session={{ id: "s", name: "Resumable runs UI", status: "active" } as never}
+      />
+    );
+    expect(screen.getByText("Main Agent - Resumable runs UI")).toBeInTheDocument();
+  });
+
+  it("swaps the real session title into the import-style placeholder (<folder> - <id8>)", () => {
+    // Regression: imported / background-synced main agents are named
+    // "Main Agent - <cwd-folder> - <id8>", which the old Session-only regex
+    // could not rewrite, so they kept showing "work - e3f8e613" forever even
+    // though the session title was known.
+    renderCard(
+      <AgentCard
+        agent={makeAgent({ type: "main", name: "Main Agent - work - e3f8e613" })}
+        session={
+          { id: "s", name: "Implement in-process libdocs MCP server", status: "active" } as never
+        }
+      />
+    );
+    expect(
+      screen.getByText("Main Agent - Implement in-process libdocs MCP server")
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Main Agent - work - e3f8e613")).not.toBeInTheDocument();
+  });
+
+  it("keeps the placeholder when the session name is still auto-generated", () => {
+    renderCard(
+      <AgentCard
+        agent={makeAgent({ type: "main", name: "Main Agent - work - e3f8e613" })}
+        session={{ id: "s", name: "Session e3f8e613", status: "active" } as never}
+      />
+    );
+    // "Session <id8>" is suppressed as a non-name, so nothing to swap in.
+    expect(screen.getByText("Main Agent - work - e3f8e613")).toBeInTheDocument();
+  });
+
   it("should not render subagent_type when null", () => {
     const { container } = renderCard(<AgentCard agent={makeAgent({ subagent_type: null })} />);
     // Only the name should be in the name container, no subagent type
