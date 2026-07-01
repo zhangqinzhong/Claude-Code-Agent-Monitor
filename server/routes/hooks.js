@@ -730,6 +730,29 @@ const processEvent = db.transaction((hookType, data) => {
         }
       }
 
+      // Self-heal a stale error on ANY hook event. If the session is marked
+      // `error` but the transcript has progressed past the last API error
+      // (successful turns after it — isErrorAtTail false), the error was
+      // transient and the session recovered. Normal recovery only fires on
+      // UserPromptSubmit/PreToolUse; an actively-running session that only emits
+      // Stop / SubagentStop / PostToolUse / Notification would otherwise stay
+      // `error` forever even as its transcript (and cost) keeps growing. This
+      // complements the watchdog, which only re-examines STALE sessions and so
+      // never reaches a busy one. isErrorAtTail is transcript-driven, so a
+      // genuinely current error (tail) is left in place.
+      {
+        const curSession = stmts.getSession.get(sessionId);
+        if (curSession && curSession.status === "error" && !isErrorAtTail(result)) {
+          stmts.reactivateSession.run(sessionId);
+          broadcast("session_updated", stmts.getSession.get(sessionId));
+          const curMain = mainAgentId ? stmts.getAgent.get(mainAgentId) : null;
+          if (curMain && curMain.status === "error") {
+            stmts.reactivateAgent.run(mainAgentId);
+            broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+          }
+        }
+      }
+
       // Register turn duration events from transcript
       if (result.turnDurations) {
         for (const td of result.turnDurations) {
