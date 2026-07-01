@@ -598,21 +598,48 @@ if (require.main === module) {
     }
     shutdownInProgress = true;
     console.log(`\n${signal} received — shutting down gracefully… (hit Ctrl+C again to force)`);
+
+    // Drop realtime clients first — open WS sockets otherwise hold the HTTP
+    // server open and stall the shutdown until the force-exit backstop fires.
+    try {
+      require("./websocket").closeWebSocket();
+    } catch {
+      /* websocket may not be initialised */
+    }
+
+    const closeDb = () => {
+      try {
+        require("./db").db.close();
+      } catch {
+        /* already closed */
+      }
+    };
+
     if (httpServer) {
+      // Close the DB only AFTER the HTTP server has fully drained. Closing it
+      // while requests are still in flight makes handlers throw "The database
+      // connection is not open" (e.g. server/routes/agents.js).
       httpServer.close(() => {
         console.log("HTTP server closed.");
+        closeDb();
+        process.exit(0);
       });
+      // Forcibly drop lingering keep-alive sockets so close() fires promptly.
+      // Under `node --watch` this is what turns a multi-second "waiting for
+      // graceful termination" stall into a near-instant restart.
+      if (typeof httpServer.closeAllConnections === "function") {
+        httpServer.closeAllConnections();
+      }
+    } else {
+      closeDb();
+      process.exit(0);
     }
-    try {
-      require("./db").db.close();
-    } catch {
-      /* already closed */
-    }
+
     // Drop the port discovery file so a later run on a different port is not
     // shadowed by a stale entry. (A crash skips this — the PID-liveness check
     // in resolveDashboardPort() is the backstop for that case.)
     removeServerInfo();
-    // Give in-flight work 5s to finish, then force exit
+    // Backstop: force exit if something still holds the event loop open.
     setTimeout(() => process.exit(0), 5000).unref();
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));

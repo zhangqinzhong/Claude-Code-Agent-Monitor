@@ -881,6 +881,13 @@ const stmts = {
   reactivateAgent: db.prepare(
     "UPDATE agents SET status = 'working', ended_at = NULL, current_tool = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
   ),
+  // Repoint a subagent at its true spawner. Used by reconcileSubagentParents to
+  // fix nested subagents that were inserted flat under the main agent (hook and
+  // JSONL ingestion can't know the spawner from a single file). Authoritative
+  // parent comes from the spawner transcript's Task tool_result (agentId).
+  setAgentParent: db.prepare(
+    "UPDATE agents SET parent_agent_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?"
+  ),
   // Awaiting-input state. Stamping awaiting_input_since marks the row as
   // "waiting" for user attention without touching the underlying status
   // enum (kept stable for legacy CHECK constraints and aggregations).

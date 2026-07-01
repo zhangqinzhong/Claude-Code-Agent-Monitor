@@ -247,7 +247,7 @@ CREATE TABLE agents (
 | `status` | TEXT | NO | `idle`, `connected`, `working`, `completed`, `error` (CHECK-constrained). The dashboard's **Waiting** badge is the UI overlay produced by `awaiting_input_since`; it is not a persisted status |
 | `task` | TEXT | YES | Subagent prompt / brief |
 | `current_tool` | TEXT | YES | Tool currently running (cleared on `PostToolUse`) |
-| `parent_agent_id` | TEXT | YES | FK to spawning agent for nested subagent trees |
+| `parent_agent_id` | TEXT | YES | FK to the spawning agent for nested subagent trees (`ON DELETE SET NULL`). Set to the main agent at insert, then repointed to the true spawner by `reconcileSubagentParents` from each subagent transcript's Task tool result (`toolUseResult.agentId`), so subagents-of-subagents nest correctly instead of flattening under main |
 | `metadata` | TEXT | YES | JSON blob for extras |
 | `awaiting_input_since` | TEXT | YES | Mirrors the parent session's flag for the main agent. NULL on subagents |
 

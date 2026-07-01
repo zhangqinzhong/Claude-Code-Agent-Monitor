@@ -362,6 +362,12 @@ async function parseSubagentFile(filePath) {
   // so the importer can emit Pre/PostToolUse events under the subagent's own agent_id.
   const toolCalls = []; // {id, name, input, timestamp}
   const toolResults = new Map(); // tool_use_id → {content, is_error, timestamp}
+  // agentIds of subagents THIS agent spawned via the Task tool. Claude Code
+  // records the spawned child's id on the Task tool_result entry as
+  // `toolUseResult.agentId`, which matches the child's `agent-<id>.jsonl` file.
+  // Inverting these across a session reconstructs the real spawn hierarchy so
+  // nested subagents nest under their spawner instead of flattening to main.
+  const spawnedChildren = new Set();
 
   for await (const line of rl) {
     if (!line.trim()) continue;
@@ -370,6 +376,10 @@ async function parseSubagentFile(filePath) {
       entry = JSON.parse(line);
     } catch {
       continue;
+    }
+
+    if (entry.toolUseResult && entry.toolUseResult.agentId) {
+      spawnedChildren.add(entry.toolUseResult.agentId);
     }
 
     const ts = entry.timestamp;
@@ -492,6 +502,7 @@ async function parseSubagentFile(filePath) {
     toolNames: [...toolNames],
     thinkingBlockCount,
     toolEvents,
+    spawnedChildren: [...spawnedChildren],
   };
 }
 
@@ -940,6 +951,73 @@ function importSubagentFromJsonl(dbModule, sessionId, mainAgentId, subData) {
 }
 
 /**
+ * Resolve the DB agent id for a parsed subagent: the live row (created by the
+ * PreToolUse "Agent" hook) if one matches, else the JSONL-keyed id. Mirrors the
+ * targetAgentId logic in importSubagentFromJsonl so parent/child linkage points
+ * at the same rows the importer wrote.
+ */
+function resolveSubagentDbId(dbModule, sessionId, subData) {
+  const live = findLiveSubagentForJsonl(dbModule, sessionId, subData);
+  return live ? live.id : `${sessionId}-jsonl-${subData.agentId}`;
+}
+
+/**
+ * Reconstruct the real parent→child hierarchy for a session's subagents.
+ *
+ * Subagent rows are inserted flat under the main agent because a single hook
+ * event or JSONL file carries no spawner identity. But each subagent's OWN
+ * transcript records every child it spawned via the Task tool
+ * (`toolUseResult.agentId`, captured as `spawnedChildren` by parseSubagentFile).
+ * Inverting that map gives child→parent; any subagent no other subagent claims
+ * stays under main. We then repoint parent_agent_id so nested agents nest under
+ * their true spawner instead of collapsing to a single level.
+ *
+ * Idempotent and additive: only rewrites parent_agent_id on existing rows,
+ * never inserts or deletes. Returns the number of rows repointed.
+ */
+function reconcileSubagentParents(dbModule, sessionId, mainAgentId, parsedSubagents) {
+  if (!Array.isArray(parsedSubagents) || parsedSubagents.length < 2) return 0;
+  const { stmts } = dbModule;
+
+  const byAgentId = new Map();
+  for (const s of parsedSubagents) if (s && s.agentId) byAgentId.set(s.agentId, s);
+
+  // child transcript id → parent transcript id, but only for parents we actually
+  // parsed (a claimed child whose spawner file is missing falls back to main).
+  const parentOf = new Map();
+  for (const s of parsedSubagents) {
+    if (!s || !Array.isArray(s.spawnedChildren)) continue;
+    for (const childId of s.spawnedChildren) {
+      if (childId && childId !== s.agentId && byAgentId.has(childId)) {
+        parentOf.set(childId, s.agentId);
+      }
+    }
+  }
+  if (parentOf.size === 0) return 0;
+
+  let updated = 0;
+  for (const s of parsedSubagents) {
+    const parentTid = parentOf.get(s.agentId);
+    if (!parentTid) continue; // direct child of main — already correct at insert
+    const parentData = byAgentId.get(parentTid);
+    if (!parentData) continue;
+
+    const childDbId = resolveSubagentDbId(dbModule, sessionId, s);
+    const parentDbId = resolveSubagentDbId(dbModule, sessionId, parentData);
+    if (!childDbId || !parentDbId || childDbId === parentDbId) continue;
+
+    const childRow = stmts.getAgent.get(childDbId);
+    const parentRow = stmts.getAgent.get(parentDbId);
+    if (!childRow || !parentRow) continue;
+    if (childRow.parent_agent_id === parentDbId) continue; // already linked
+
+    stmts.setAgentParent.run(parentDbId, childDbId);
+    updated++;
+  }
+  return updated;
+}
+
+/**
  * Import a parsed session into the database.
  */
 function importSession(dbModule, session) {
@@ -1061,6 +1139,16 @@ function importSession(dbModule, session) {
         if (importSubagentFromJsonl(dbModule, session.sessionId, mainAgentId, subData) > 0)
           backfilled = true;
       }
+      // Repoint nested subagents under their true spawner (inserts land flat).
+      if (
+        reconcileSubagentParents(
+          dbModule,
+          session.sessionId,
+          mainAgentId,
+          session.parsedSubagents
+        ) > 0
+      )
+        backfilled = true;
     }
 
     // Turn-duration events — one per JSONL entry newer than cutoff.
@@ -1363,6 +1451,8 @@ function importSession(dbModule, session) {
     for (const subData of session.parsedSubagents) {
       importSubagentFromJsonl(dbModule, session.sessionId, mainAgentId, subData);
     }
+    // Repoint nested subagents under their true spawner (inserts land flat).
+    reconcileSubagentParents(dbModule, session.sessionId, mainAgentId, session.parsedSubagents);
   }
 
   writeSessionTokens(dbModule, session.sessionId, combineSessionTokens(session));
@@ -2184,6 +2274,16 @@ async function scanAndImportSubagents(dbModule, sessionId, transcriptPath, opts 
     }
   }
 
+  // Repoint nested subagents under their true spawner. Rows are inserted flat
+  // under main (a single subagent JSONL carries no spawner id); the spawner's
+  // transcript names each child it spawned, so we can rebuild the real tree.
+  let reparented = 0;
+  try {
+    reparented = reconcileSubagentParents(dbModule, sessionId, mainAgentId, parsedSubagents);
+  } catch {
+    // non-fatal — hierarchy correction is best-effort during a live run
+  }
+
   // Attribute each subagent's token usage to ITS OWN model (issue #185).
   // A Haiku QA agent under an Opus orchestrator must keep its own (cheaper)
   // token bucket instead of being priced at the orchestrator's rate.
@@ -2225,7 +2325,7 @@ async function scanAndImportSubagents(dbModule, sessionId, transcriptPath, opts 
     }
   }
 
-  return { imported: subFiles.length, created };
+  return { imported: subFiles.length, created, reparented };
 }
 
 module.exports = {
@@ -2237,6 +2337,7 @@ module.exports = {
   importSubagents,
   importApiErrors,
   importSubagentFromJsonl,
+  reconcileSubagentParents,
   parseSessionFile,
   parseSubagentFile,
   findCompactionsInFile,

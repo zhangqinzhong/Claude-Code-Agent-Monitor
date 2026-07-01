@@ -539,6 +539,15 @@ calculations match real-time captured sessions exactly. Re-imports are
 idempotent (dedupe by session ID; compaction `baseline_*` columns
 prevent token double-counting).
 
+Imported and live-scanned subagents also get their **nested hierarchy**
+rebuilt: rows are inserted flat under the main agent, then
+`reconcileSubagentParents` recovers each spawner from the subagent
+transcript's Task tool result (`toolUseResult.agentId`) and repoints
+`parent_agent_id` so subagents-of-subagents nest under their true spawner
+instead of collapsing to one level. It is idempotent and additive (only
+rewrites `parent_agent_id`) and runs in `importSession` and the live
+`scanAndImportSubagents` path (which returns a `reparented` count).
+
 | Method | Path                      | Description                                                              |
 | ------ | ------------------------- | ------------------------------------------------------------------------ |
 | `GET`  | `/api/import/guide`       | OS-aware paths, archive command, supported extensions, step instructions |
@@ -1059,6 +1068,17 @@ Only two events can recover a session from `error` back to `active`:
 - **`PreToolUse`** — agent begins using a tool (session resumed with work)
 
 This ensures error states are only cleared by deliberate user action, not by background activity.
+
+### Graceful Shutdown
+
+`SIGTERM` / `SIGINT` tear the server down in a fixed order so a restart is fast and clean (this matters most under `node --watch`, which SIGTERMs on every file save):
+
+1. **Drop realtime clients first** — `closeWebSocket()` (`server/websocket.js`) terminates every WebSocket client so their underlying TCP sockets release. Open WS sockets otherwise keep the HTTP server alive.
+2. **`httpServer.close()`** — stop accepting new connections and begin draining in-flight requests.
+3. **`httpServer.closeAllConnections()`** — forcibly drop lingering keep-alive sockets so `close()` actually completes promptly instead of hanging.
+4. **Close SQLite last** — inside the `close()` callback, *after* the HTTP server has drained, then `process.exit(0)`.
+
+Ordering matters: closing the DB before the HTTP server drained made in-flight requests throw `The database connection is not open` (e.g. `routes/agents.js`); leaving WS/keep-alive sockets open stalled shutdown until the 5 s force-exit backstop (the "waiting for graceful termination" hang). A second signal forces an immediate exit.
 
 ---
 

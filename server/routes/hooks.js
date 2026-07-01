@@ -864,16 +864,21 @@ router.post("/event", (req, res) => {
     scanAndImportSubagents(dbModule, data.session_id, data.transcript_path, {
       parentModels: parentTokenModels,
     })
-      .then(({ created }) => {
-        if (created > 0) {
+      .then(({ created, reparented }) => {
+        if (created > 0 || reparented > 0) {
           // Nudge SessionDetail to refetch — the page already debounces
-          // bursts of new_event into a single paginated reload.
+          // bursts of new_event into a single paginated reload. A pure
+          // re-parent (created === 0) still changes the tree shape, so it
+          // must trigger a refetch too.
           broadcast("new_event", {
             session_id: data.session_id,
             agent_id: null,
             event_type: "SubagentJsonlImported",
             tool_name: null,
-            summary: `Imported ${created} subagent record(s) from JSONL`,
+            summary:
+              created > 0
+                ? `Imported ${created} subagent record(s) from JSONL`
+                : `Re-parented ${reparented} nested subagent(s)`,
             created_at: new Date().toISOString(),
           });
         }
