@@ -132,6 +132,14 @@ export interface ModelPricing {
   cache_write_1h_per_mtok: number;
   fast_input_per_mtok: number;
   fast_output_per_mtok: number;
+  // Time-limited introductory rates: usage on/before intro_until (YYYY-MM-DD)
+  // prices at these rates, after it at the standard rates. null/0 = no intro.
+  intro_input_per_mtok?: number;
+  intro_output_per_mtok?: number;
+  intro_cache_read_per_mtok?: number;
+  intro_cache_write_per_mtok?: number;
+  intro_cache_write_1h_per_mtok?: number;
+  intro_until?: string | null;
   updated_at: string;
 }
 

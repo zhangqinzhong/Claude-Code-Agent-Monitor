@@ -8031,7 +8031,7 @@ exports[`screen snapshots > Settings 1`] = `
           <p
             class="text-xs text-gray-500 mt-0.5"
           >
-            Rates per million tokens (USD). Use % as wildcard in patterns.
+            Rates per million tokens (USD). Use % as wildcard in patterns. Some models have a time-limited introductory rate (shown in violet); usage on or before its cutoff date is billed at that rate, and usage after it at the standard rate.
           </p>
         </div>
         <div

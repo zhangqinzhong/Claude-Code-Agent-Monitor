@@ -1042,12 +1042,33 @@ export function Settings() {
                     <td className="px-4 py-3 text-sm font-mono text-gray-300">
                       {rule.model_pattern}
                     </td>
-                    <td className="px-4 py-3 text-sm text-gray-300">{rule.display_name}</td>
+                    <td className="px-4 py-3 text-sm text-gray-300">
+                      {rule.display_name}
+                      {rule.intro_until && (
+                        <div className="text-[11px] font-normal text-violet-400/80 mt-0.5">
+                          {t("pricing.introNote", {
+                            input: rule.intro_input_per_mtok,
+                            output: rule.intro_output_per_mtok,
+                            until: rule.intro_until,
+                          })}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-400 text-right font-mono">
                       ${rule.input_per_mtok}
+                      {rule.intro_until && (
+                        <span className="block text-[11px] text-violet-400/80">
+                          ${rule.intro_input_per_mtok}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-400 text-right font-mono">
                       ${rule.output_per_mtok}
+                      {rule.intro_until && (
+                        <span className="block text-[11px] text-violet-400/80">
+                          ${rule.intro_output_per_mtok}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-400 text-right font-mono">
                       ${rule.cache_read_per_mtok}
