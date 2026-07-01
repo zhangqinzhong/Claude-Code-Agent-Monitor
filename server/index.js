@@ -633,10 +633,17 @@ if (require.main === module) {
         closeDb();
         process.exit(0);
       });
-      // Forcibly drop lingering keep-alive sockets so close() fires promptly.
-      // Under `node --watch` this is what turns a multi-second "waiting for
-      // graceful termination" stall into a near-instant restart.
-      if (typeof httpServer.closeAllConnections === "function") {
+      // Drop lingering IDLE keep-alive sockets so close() fires promptly (under
+      // `node --watch` this turns a multi-second "waiting for graceful
+      // termination" stall into a near-instant restart) while letting in-flight
+      // requests finish and drain — the whole point of closing the DB in the
+      // close() callback. closeAllConnections() would kill in-flight requests
+      // too, so use it only as a fallback on runtimes without
+      // closeIdleConnections; the 5s backstop below covers a genuinely stuck
+      // request either way.
+      if (typeof httpServer.closeIdleConnections === "function") {
+        httpServer.closeIdleConnections();
+      } else if (typeof httpServer.closeAllConnections === "function") {
         httpServer.closeAllConnections();
       }
     } else {
@@ -648,8 +655,14 @@ if (require.main === module) {
     // shadowed by a stale entry. (A crash skips this — the PID-liveness check
     // in resolveDashboardPort() is the backstop for that case.)
     removeServerInfo();
-    // Backstop: force exit if something still holds the event loop open.
-    setTimeout(() => process.exit(0), 5000).unref();
+    // Backstop: force exit if something still holds the event loop open. Close
+    // the DB here too — if close() never drained (a stuck in-flight request),
+    // the callback above never ran, so this is the only path that flushes
+    // SQLite before exit (closeDb is idempotent, so a normal drain is fine).
+    setTimeout(() => {
+      closeDb();
+      process.exit(0);
+    }, 5000).unref();
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));

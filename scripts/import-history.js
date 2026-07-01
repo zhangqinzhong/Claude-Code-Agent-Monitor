@@ -1011,6 +1011,24 @@ function reconcileSubagentParents(dbModule, sessionId, mainAgentId, parsedSubage
     if (!childRow || !parentRow) continue;
     if (childRow.parent_agent_id === parentDbId) continue; // already linked
 
+    // Cycle guard. A real Task-spawn DAG is acyclic, but guard defensively:
+    // if the proposed parent is already a descendant of the child (walking up
+    // the parent chain from the parent reaches the child), linking them would
+    // create a loop that the recursive tree builders (client + findDeepest CTE)
+    // would spin on. Skip such a link rather than corrupt the hierarchy.
+    let cursor = parentDbId;
+    const seen = new Set([childDbId]);
+    let createsCycle = false;
+    while (cursor) {
+      if (seen.has(cursor)) {
+        createsCycle = true;
+        break;
+      }
+      seen.add(cursor);
+      cursor = stmts.getAgent.get(cursor)?.parent_agent_id || null;
+    }
+    if (createsCycle) continue;
+
     stmts.setAgentParent.run(parentDbId, childDbId);
     updated++;
   }

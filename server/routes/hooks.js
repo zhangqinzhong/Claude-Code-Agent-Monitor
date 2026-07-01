@@ -712,11 +712,17 @@ const processEvent = db.transaction((hookType, data) => {
           newErrorRecorded = true;
         }
 
-        // Only flip to error when we recorded a NEW error this call. Pre-existing
-        // transcript errors must not re-overwrite status, otherwise sessions the
-        // user already recovered from (UserPromptSubmit reactivation above) get
-        // yanked back into 'error' the moment the transcript scan re-reads them.
-        if (newErrorRecorded) {
+        // Flip to error only when we recorded a NEW error this call AND that
+        // error is still unrecovered at the transcript tail (isErrorAtTail).
+        // The APIError events are always kept for history, but a transient error
+        // the CLI already retried past (successful turns after it — e.g.
+        // "Connection closed mid-response" mid-run) must NOT trip the whole
+        // session to `error`; only a genuinely-current failure should. This is
+        // the primary guard against false Error flapping; the self-heal below is
+        // the safety net for sessions flipped by older builds. The
+        // newErrorRecorded gate also stops re-reads from yanking a recovered
+        // session back into error.
+        if (newErrorRecorded && isErrorAtTail(result)) {
           const curSession = stmts.getSession.get(sessionId);
           if (curSession && curSession.status === "active") {
             stmts.updateSession.run(null, "error", null, null, sessionId);
@@ -903,9 +909,11 @@ router.post("/event", (req, res) => {
             event_type: "SubagentJsonlImported",
             tool_name: null,
             summary:
-              created > 0
-                ? `Imported ${created} subagent record(s) from JSONL`
-                : `Re-parented ${reparented} nested subagent(s)`,
+              created > 0 && reparented > 0
+                ? `Imported ${created} subagent record(s) and re-parented ${reparented} nested subagent(s)`
+                : created > 0
+                  ? `Imported ${created} subagent record(s) from JSONL`
+                  : `Re-parented ${reparented} nested subagent(s)`,
             created_at: new Date().toISOString(),
           });
         }
@@ -1143,17 +1151,21 @@ function watchdogCheck() {
           });
         }
 
-        // Only flip to error when we actually detected a new error this tick.
-        // Pre-existing transcript errors must not re-overwrite status, otherwise
-        // sessions the user already recovered from (UserPromptSubmit reactivation
-        // at the top of processEvent) get yanked back into 'error' on every poll.
-        stmts.updateSession.run(null, "error", null, null, sess.id);
-        broadcast("session_updated", stmts.getSession.get(sess.id));
-        if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
-          stmts.updateAgent.run(null, "error", null, null, null, null, mainAgentId);
-          if (mainAgentId) {
-            stmts.clearAgentAwaitingInput.run(mainAgentId);
-            broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+        // Flip to error only when a NEW error was detected this tick AND it is
+        // still unrecovered at the transcript tail. The events above are kept
+        // for history regardless, but a transient error the CLI already retried
+        // past (successful turns after it) must not trip the session to `error`.
+        // (The newErrorRecorded gate also stops re-reads from yanking a
+        // recovered session back into error.)
+        if (isErrorAtTail(result)) {
+          stmts.updateSession.run(null, "error", null, null, sess.id);
+          broadcast("session_updated", stmts.getSession.get(sess.id));
+          if (mainAgent && mainAgent.status !== "completed" && mainAgent.status !== "error") {
+            stmts.updateAgent.run(null, "error", null, null, null, null, mainAgentId);
+            if (mainAgentId) {
+              stmts.clearAgentAwaitingInput.run(mainAgentId);
+              broadcast("agent_updated", stmts.getAgent.get(mainAgentId));
+            }
           }
         }
       }
