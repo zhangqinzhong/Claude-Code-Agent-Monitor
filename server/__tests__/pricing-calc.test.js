@@ -225,3 +225,40 @@ describe("calculateCost — server-tool surcharges", () => {
     assert.equal(r.feature_costs.code_execution_cost, 5); // 100 hrs * $0.05
   });
 });
+
+describe("calculateCost — model_pattern matching (dated ids, no cross-match)", () => {
+  // Sonnet-5 alongside Sonnet-4.6 + Opus, mirroring the seeded DEFAULT_PRICING.
+  const FAMILY = [
+    { model_pattern: "claude-opus-4-8%", input_per_mtok: 5, output_per_mtok: 25 },
+    { model_pattern: "claude-sonnet-5%", input_per_mtok: 3, output_per_mtok: 15 },
+    { model_pattern: "claude-sonnet-4-6%", input_per_mtok: 3, output_per_mtok: 15 },
+  ];
+  const priceOf = (model) => {
+    const r = calculateCost([bucket({ model, output_tokens: M })], FAMILY);
+    return { cost: r.total_cost, unpriced: r.unpriced_models.map((u) => u.model) };
+  };
+
+  it("prices bare claude-sonnet-5 (not $0, not unpriced)", () => {
+    const { cost, unpriced } = priceOf("claude-sonnet-5");
+    assert.equal(cost, 15); // 1M output * $15
+    assert.deepEqual(unpriced, []);
+  });
+
+  it("prices a dated claude-sonnet-5-YYYYMMDD via the % suffix", () => {
+    const { cost, unpriced } = priceOf("claude-sonnet-5-20260615");
+    assert.equal(cost, 15);
+    assert.deepEqual(unpriced, []);
+  });
+
+  it("does not cross-match sonnet-5 ↔ sonnet-4.x (both stay priced by their own rule)", () => {
+    // If claude-sonnet-5 wrongly matched the 4.6 rule (or vice versa) via a
+    // greedy/short pattern, one of these would resolve to the wrong row. Both
+    // are $3/$15 here, so the real guard is that neither is left UNPRICED and
+    // the sonnet-4.5 (absent) case IS surfaced as unpriced.
+    assert.deepEqual(priceOf("claude-sonnet-4-6").unpriced, []);
+    assert.deepEqual(priceOf("claude-sonnet-5").unpriced, []);
+    // A model with no rule (sonnet-4-5 not in FAMILY) must be reported unpriced,
+    // proving sonnet-5%/sonnet-4-6% don't greedily swallow it.
+    assert.deepEqual(priceOf("claude-sonnet-4-5").unpriced, ["claude-sonnet-4-5"]);
+  });
+});
