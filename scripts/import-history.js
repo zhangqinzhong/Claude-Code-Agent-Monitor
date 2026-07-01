@@ -312,6 +312,11 @@ async function parseSessionFile(filePath) {
     version,
     slug,
     gitBranch,
+    // The transcript's own path, so importSession can persist it on the session
+    // row. Without this, imported sessions have transcript_path = NULL and the
+    // abandon sweep, compaction scanner, and per-agent cost backfill can't find
+    // their transcript. (Live/hook sessions get it from the hook payload.)
+    transcriptPath: filePath,
     startedAt: firstTimestamp,
     endedAt: lastTimestamp,
     teams: [...teams],
@@ -898,6 +903,27 @@ function importSubagentFromJsonl(dbModule, sessionId, mainAgentId, subData) {
         meta.model = subData.model;
         changed = true;
       }
+      // Enrich a merged live/hook row with the metadata parsed from its
+      // transcript. Live rows (created by the PreToolUse "Agent" hook) carry
+      // none of this, so without backfilling here those exact subagents render
+      // with empty tool/message/thinking metadata. Only fill fields still
+      // missing so a richer existing value is never clobbered.
+      if (subData.toolNames && subData.toolNames.length > 0 && !meta.tools) {
+        meta.tools = subData.toolNames;
+        changed = true;
+      }
+      if (meta.user_messages == null && subData.userMessages != null) {
+        meta.user_messages = subData.userMessages;
+        changed = true;
+      }
+      if (meta.assistant_messages == null && subData.assistantMessages != null) {
+        meta.assistant_messages = subData.assistantMessages;
+        changed = true;
+      }
+      if (meta.thinking_blocks == null && subData.thinkingBlockCount != null) {
+        meta.thinking_blocks = subData.thinkingBlockCount;
+        changed = true;
+      }
       // Stamp per-agent token buckets so the row can be priced independently.
       // Rewrite when the parsed usage differs; also stamp once (even []) on rows
       // that predate this key so the backfill pass below doesn't re-scan a
@@ -1194,14 +1220,31 @@ function importSession(dbModule, session) {
     );
     if (compactCount > 0) backfilled = true;
 
-    // Backfill subagent records from Agent tool_use blocks
-    const subagentCount = importSubagents(
-      dbModule,
-      session.sessionId,
-      mainAgentId,
-      session.toolUses
-    );
-    if (subagentCount > 0) backfilled = true;
+    // Persist the transcript path so the abandon sweep, compaction scanner, and
+    // per-agent cost backfill can locate this session's transcript. The stmt
+    // only writes when the column is still empty, so it's a one-time no-op after.
+    if (session.transcriptPath) {
+      stmts.setSessionTranscriptPath.run(session.transcriptPath, session.sessionId);
+    }
+
+    // Subagent records. When the session has subagent TRANSCRIPTS
+    // (parsedSubagents), those `-jsonl-` rows are authoritative and richer
+    // (real model, tokens, tools) — so we must NOT also create `-subagent-N`
+    // rows from the main transcript's Agent blocks: the two are deduped only by
+    // a fragile type+timing match, and when it misses (the Agent-block timestamp
+    // and the subagent transcript's first timestamp differ by more than the
+    // tolerance) every subagent ends up DUPLICATED. Fall back to importSubagents
+    // only when there are no transcripts to reconstruct from.
+    const hasParsedSubs = session.parsedSubagents && session.parsedSubagents.length > 0;
+    if (!hasParsedSubs) {
+      const subagentCount = importSubagents(
+        dbModule,
+        session.sessionId,
+        mainAgentId,
+        session.toolUses
+      );
+      if (subagentCount > 0) backfilled = true;
+    }
 
     // Backfill API errors
     const apiErrCount = importApiErrors(
@@ -1277,7 +1320,12 @@ function importSession(dbModule, session) {
     const metaChanged =
       meta.user_messages !== session.userMessages ||
       meta.assistant_messages !== session.assistantMessages ||
-      (!meta.entrypoint && (session.entrypoint || session.turnDurations?.length > 0));
+      (!meta.entrypoint && (session.entrypoint || session.turnDurations?.length > 0)) ||
+      // Also refresh when turn count or thinking blocks grew even if the message
+      // counts happen to be unchanged, so usage_extras / turn_count / thinking
+      // aren't left stale on a re-imported, still-growing session.
+      (session.turnDurations && (meta.turn_count || 0) !== session.turnDurations.length) ||
+      (session.thinkingBlockCount || 0) > (meta.thinking_blocks || 0);
     if (metaChanged) {
       meta.user_messages = session.userMessages;
       meta.assistant_messages = session.assistantMessages;
@@ -1388,6 +1436,12 @@ function importSession(dbModule, session) {
     session.sessionId
   );
 
+  // Persist the transcript path so the abandon sweep, compaction scanner, and
+  // per-agent cost backfill can locate this session's transcript later.
+  if (session.transcriptPath) {
+    stmts.setSessionTranscriptPath.run(session.transcriptPath, session.sessionId);
+  }
+
   const mainAgentId = `${session.sessionId}-main`;
   const agentLabel = `Main Agent - ${session.name}`;
   stmts.insertAgent.run(
@@ -1489,8 +1543,14 @@ function importSession(dbModule, session) {
   // Create compaction agents/events
   importCompactions(dbModule, session.sessionId, mainAgentId, session.compactions);
 
-  // Create subagent records from Agent tool_use blocks
-  importSubagents(dbModule, session.sessionId, mainAgentId, session.toolUses);
+  // Create subagent records from Agent tool_use blocks ONLY when there are no
+  // subagent transcripts to reconstruct from. When transcripts exist, the
+  // `-jsonl-` rows below are authoritative; running both sources duplicates
+  // every subagent (they're deduped only by a fragile type+timing match). See
+  // the same guard on the backfill path above.
+  if (!(session.parsedSubagents && session.parsedSubagents.length > 0)) {
+    importSubagents(dbModule, session.sessionId, mainAgentId, session.toolUses);
+  }
 
   // Import API errors
   importApiErrors(dbModule, session.sessionId, mainAgentId, session.apiErrors);
@@ -2085,10 +2145,15 @@ function collectJsonlFiles(rootDir) {
  * a session-id folder). Anything else is treated as a top-level session.
  */
 function classifyJsonl(filePath) {
-  const parent = path.basename(path.dirname(filePath));
-  if (parent === "subagents") return "subagent";
-  const grand = path.basename(path.dirname(path.dirname(filePath)));
-  if (grand === "subagents") return "subagent";
+  // Any transcript living under a `subagents/` directory at ANY depth is a
+  // subagent, not a top-level session — this includes the flat
+  // `<sid>/subagents/agent-*.jsonl` layout AND the dynamic-workflow tree
+  // `<sid>/subagents/workflows/<runId>/agent-*.jsonl`. Walking the whole
+  // ancestor chain (rather than just parent/grandparent) stops workflow
+  // inner-agent files from being misimported as bogus top-level sessions when a
+  // user points the directory importer at a tree that contains workflow runs.
+  const segments = path.dirname(filePath).split(path.sep);
+  if (segments.includes("subagents")) return "subagent";
   return "session";
 }
 
@@ -2436,13 +2501,17 @@ async function backfillSubagentTokenMetadata(dbModule) {
   const { db } = dbModule;
   let sessions;
   try {
+    // Every session still holding a non-compaction subagent without a tokens
+    // key. Note: NOT filtered on transcript_path — most imported sessions have
+    // it NULL, yet their transcript is still on disk at the derivable
+    // <projectsDir>/<slug>/<sid>.jsonl path, so we resolve it below.
     sessions = db
       .prepare(
-        `SELECT DISTINCT s.id AS session_id, s.transcript_path AS tp
+        `SELECT DISTINCT s.id AS session_id, s.transcript_path AS tp,
+                s.metadata AS meta
          FROM agents a JOIN sessions s ON s.id = a.session_id
          WHERE a.type = 'subagent'
            AND (a.subagent_type IS NULL OR a.subagent_type != 'compaction')
-           AND s.transcript_path IS NOT NULL
            AND (a.metadata IS NULL OR a.metadata NOT LIKE '%"tokens":%')`
       )
       .all();
@@ -2450,18 +2519,41 @@ async function backfillSubagentTokenMetadata(dbModule) {
     return { sessions: 0, stamped: 0 };
   }
   let stamped = 0;
+  let scanned = 0;
   for (const s of sessions) {
-    const subDir = path.join(path.dirname(s.tp), s.session_id, "subagents");
-    let files;
-    try {
-      files = (await fs.promises.readdir(subDir)).filter((f) => f.endsWith(".jsonl"));
-    } catch {
-      continue; // transcript dir gone (moved/cleaned) — nothing to re-parse
-    }
-    const mainAgentId = `${s.session_id}-main`;
-    for (const f of files) {
+    // Resolve the session transcript path: prefer the stored column when the
+    // file still exists, else derive it from the projects dir + slug (imported
+    // sessions leave transcript_path NULL). findSessionSubagents then covers
+    // BOTH on-disk layouts (<dir>/<sid>/subagents and <dir>/subagents/<sid>).
+    let transcriptPath = s.tp && fs.existsSync(s.tp) ? s.tp : null;
+    if (!transcriptPath) {
+      let slug = null;
       try {
-        const subData = await parseSubagentFile(path.join(subDir, f));
+        slug = s.meta ? JSON.parse(s.meta).slug : null;
+      } catch {
+        slug = null;
+      }
+      if (slug) {
+        const candidate = path.join(PROJECTS_DIR, slug, `${s.session_id}.jsonl`);
+        // The file itself may be gone, but findSessionSubagents only needs the
+        // path to derive the sibling subagents dir — so accept the candidate as
+        // long as its directory exists.
+        if (fs.existsSync(path.dirname(candidate))) transcriptPath = candidate;
+      }
+    }
+    if (!transcriptPath) continue; // can't locate the transcript tree — skip
+    let subFiles;
+    try {
+      subFiles = findSessionSubagents(transcriptPath);
+    } catch {
+      continue;
+    }
+    if (!subFiles || subFiles.length === 0) continue;
+    scanned++;
+    const mainAgentId = `${s.session_id}-main`;
+    for (const file of subFiles) {
+      try {
+        const subData = await parseSubagentFile(file);
         if (!subData) continue;
         importSubagentFromJsonl(dbModule, s.session_id, mainAgentId, subData);
         stamped++;
@@ -2470,7 +2562,7 @@ async function backfillSubagentTokenMetadata(dbModule) {
       }
     }
   }
-  return { sessions: sessions.length, stamped };
+  return { sessions: scanned, stamped };
 }
 
 module.exports = {
