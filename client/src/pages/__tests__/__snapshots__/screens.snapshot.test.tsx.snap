@@ -5075,7 +5075,7 @@ exports[`screen snapshots > Dashboard 1`] = `
             <span
               class="text-xs text-gray-500 mb-1 flex-shrink-0"
             >
-              0 total
+              0 in active sessions
             </span>
           </div>
         </div>
